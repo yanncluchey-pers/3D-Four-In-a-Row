@@ -1,0 +1,142 @@
+# 🎮 3D Four-in-a-Row
+
+A fully-featured 3D Four-in-a-Row game (4×4×4 grid) playable in the browser as a single self-contained HTML file. Play locally against a friend, challenge an AI opponent, or compete online in real time.
+
+---
+
+## What is this?
+
+Four-in-a-Row is the classic connection game — but played across a **4×4×4 three-dimensional grid**. Players take turns placing tokens, aiming to connect four in a line in any direction: horizontal, vertical, diagonal within a layer, or diagonally across layers. There are 76 possible winning lines in total.
+
+**Features:**
+- 🎮 **Three game modes** — Local 2-player, vs AI (Easy or Hard), Online multiplayer
+- 🌐 **Real-time online play** — Host a game, share a 4-letter code, friend joins instantly
+- 🧊 **Interactive 3D view** — Rotate the cube, drag with momentum, slice layers apart
+- 🤖 **Two AI difficulty levels** — Easy AI plays with intent but makes mistakes; Hard AI uses full heuristic scoring
+- 🏆 **Win detection** — All 76 win lines checked; winning cells highlighted in both 2D and 3D
+- 💾 **Persistent state** — Game state and scores saved to localStorage across sessions
+- 📱 **PWA-ready** — Includes manifest and service worker for installability
+
+---
+
+## How to Run
+
+### Option 1 — Open directly in a browser
+Download `four-in-a-row.html` and open it in any modern browser. No server, no build step, no dependencies to install.
+
+```
+open four-in-a-row.html
+```
+
+### Option 2 — GitHub Pages (recommended for online play)
+1. Fork or upload to a GitHub repository
+2. Go to **Settings → Pages**
+3. Set source to **main branch / root**
+4. Access at: `https://YOUR_USERNAME.github.io/YOUR_REPO/four-in-a-row.html`
+
+> **Note:** Online multiplayer requires the page to be served over HTTPS (GitHub Pages satisfies this). It will not work when opened as a local `file://` URL due to Firebase connection restrictions.
+
+### Option 3 — Local dev server
+```bash
+npx serve .
+# or
+python3 -m http.server 8080
+```
+Then visit `http://localhost:8080/four-in-a-row.html`.
+
+---
+
+## How to Play
+
+1. **Local 2P** — Two players share a device, taking turns clicking cells
+2. **Easy / Hard AI** — Play against the computer; Hard AI checks for wins, blocks threats, and scores positionally
+3. **Online** — Click **Online** in the mode picker, choose **Host** to get a 4-letter code, share it with your opponent who clicks **Join**
+
+Click the scoreboard to expand the mode picker. Player names are editable by clicking on them.
+
+---
+
+## Tech Stack
+
+The entire application is a **single HTML file** with no build process or npm dependencies.
+
+| Component | Technology |
+|---|---|
+| UI & Game Logic | Vanilla JavaScript (ES2020) |
+| Styling | CSS custom properties, flexbox |
+| 3D Rendering | [Three.js r128](https://threejs.org/) via CDN |
+| Online Multiplayer | [Firebase Realtime Database](https://firebase.google.com/products/realtime-database) v9.23.0 (compat SDK) via CDN |
+| Font | [Nunito](https://fonts.google.com/specimen/Nunito) via Google Fonts |
+| PWA | Service Worker + Web App Manifest (`sw.js`, `manifest.json`) |
+
+### Architecture
+
+- **Game state** (`gs`) is a plain JS object holding the 4×4×4 board, scores, player names, emoji pair, and mode. It is persisted to `localStorage` and validated on load to handle stale/legacy saves gracefully.
+- **2D rendering** rebuilds the board from scratch on each state change — four `.board-card` elements, each containing a 4×4 grid of clickable cells.
+- **3D rendering** uses Three.js `LineSegments` for the wireframe grid and `Sprite` objects with canvas-rendered emoji textures for tokens. The cube supports drag-to-rotate with momentum and a slice-separation slider.
+- **AI** uses a heuristic that scores empty cells by their contribution to open win lines, with immediate win/block detection. Easy mode adds heavy noise and occasionally skips blocking.
+- **Online multiplayer** is peer-to-peer via Firebase — no game server. One player hosts (writes the initial game state), the other joins. Both players attach a `ref.on('value')` listener for real-time sync. Presence is tracked via `onDisconnect()` callbacks.
+
+### Online Game Lifecycle
+
+```
+Host creates game → writes full state to /games/{CODE}
+Guest reads code  → updates guestConnected: true
+Both attach       → ref.on('value') listener for real-time sync
+Move made         → writer updates board + turn in Firebase
+Both see update   → listener diffs board to detect new token
+Game ends         → gameOver: true written to Firebase
+Either leaves     → onDisconnect sets their connected flag to false
+```
+
+---
+
+## Firebase Setup
+
+The app uses a Firebase Realtime Database. The config is hardcoded in the HTML:
+
+- **Project:** `four-in-a-row-33cb1`
+- **Region:** `europe-west1`
+- **Database URL:** `https://four-in-a-row-33cb1-default-rtdb.europe-west1.firebasedatabase.app`
+
+### Security Rules
+
+Add the following rules in the [Firebase Console](https://console.firebase.google.com/) under **Realtime Database → Rules**. This restricts access to only the `games` path and adds an index for efficient TTL queries:
+
+```json
+{
+  "rules": {
+    "games": {
+      ".indexOn": ["lastActivity"],
+      "$gameId": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}
+```
+
+### Automatic Cleanup (TTL)
+
+Firebase Realtime Database has no native TTL. Instead, the app performs **client-side cleanup on every page load**:
+
+- All game codes you've ever hosted or joined are tracked in `localStorage` under `4iar3d_codes`
+- On load, each known code is checked individually against Firebase
+- Any game with no `lastActivity` timestamp, or with a `lastActivity` older than **24 hours**, is automatically deleted
+- This keeps the database tidy with no server infrastructure or paid Firebase plan required
+
+### Forking / Using Your Own Firebase
+
+To point the app at your own Firebase project:
+
+1. Create a new Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
+2. Enable **Realtime Database**
+3. Replace the `firebaseConfig` object in the `<script>` section of `four-in-a-row.html` with your own project's config
+4. Apply the security rules above
+
+---
+
+## Browser Compatibility
+
+Tested and working in Chrome, Edge, Firefox, and Safari (desktop). Requires a browser with ES2020 support and WebGL for the 3D view.
