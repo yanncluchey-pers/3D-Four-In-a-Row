@@ -1,0 +1,2453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1e2540">
+<title>Four In A Row 3D</title>
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+/* ── Reset ── */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; } html { overflow-x: hidden; }
+
+:root {
+  --gap: 12px;
+  --card-radius: 18px;
+  --grid-pad: 12px;
+  --token-size: 28px;
+  --avatar-size: 42px;
+  --score-font: 22px;
+  --name-font: 13px;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: 'Nunito', sans-serif;
+  background: radial-gradient(ellipse at 50% 60%, #1e2540 0%, #111520 100%);
+  overflow-x: hidden;
+  overflow-y: hidden;
+  user-select: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* ── Zoom root ── */
+#zoom-root {
+  transform-origin: center center;
+  transition: transform 0.12s ease-out;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap);
+  width: 100%;
+  min-width: 600px;
+}
+
+/* ── Top bar ── */
+.top-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  width: 100%;
+  padding: 0 8px;
+}
+
+/* ── Turn indicator ── */
+.turn-indicator {
+  background: #1a1f2e;
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 12px; font-weight: 800; color: #6b7591;
+  letter-spacing: 0.05em; border: 1.5px solid #2a3048;
+  white-space: nowrap; transition: color 0.3s, border-color 0.3s;
+  min-width: 120px; text-align: center; flex-shrink: 0;
+}
+.turn-indicator.active-o { color: #ffd97a; border-color: rgba(255,217,122,0.4); }
+.turn-indicator.active-x { color: #b784ff; border-color: rgba(183,132,255,0.4); }
+
+/* ── Scoreboard (expandable) ── */
+.scoreboard {
+  display: flex; flex-direction: column; align-items: stretch;
+  background: #23293a; border-radius: var(--card-radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+  cursor: pointer; transition: box-shadow 0.2s;
+  overflow: hidden; position: relative; flex-shrink: 1; min-width: 0; max-width: 320px;
+}
+.scoreboard:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1.5px rgba(255,255,255,0.07); }
+.scoreboard-row {
+  display: flex; align-items: center; gap: 16px; padding: 10px 18px 12px;
+}
+.player-slot { display: flex; align-items: center; gap: 8px; transition: opacity 0.3s; min-width: 0; }
+.player-slot.inactive { opacity: 0.38; }
+.player-avatar {
+  width: var(--avatar-size); height: var(--avatar-size); border-radius: 12px;
+  background: #343c52; display: flex; align-items: center; justify-content: center;
+  font-size: 22px; border: 2px solid rgba(255,255,255,0.08);
+  transition: border-color 0.3s, box-shadow 0.3s; flex-shrink: 0;
+}
+.player-slot.active-o .player-avatar { border-color: rgba(255,217,122,0.6); box-shadow: 0 0 14px rgba(255,217,122,0.25); }
+.player-slot.active-x .player-avatar { border-color: rgba(183,132,255,0.6); box-shadow: 0 0 14px rgba(183,132,255,0.25); }
+.player-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.player-name-wrap { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.player-name {
+  font-size: var(--name-font); font-weight: 800; color: #c8cfe0;
+  cursor: pointer; border-bottom: 1px dashed transparent; transition: border-color 0.2s;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;
+}
+.player-name:hover { border-color: rgba(255,255,255,0.3); }
+.player-name-input {
+  font-size: var(--name-font); font-weight: 800; color: #fff;
+  background: rgba(255,255,255,0.08); border: 1.5px solid rgba(255,255,255,0.25);
+  border-radius: 6px; padding: 1px 6px; outline: none; font-family: inherit; width: 80px;
+}
+.player-score { font-size: var(--score-font); font-weight: 900; color: #fff; line-height: 1; }
+.vs-divider { font-size: 11px; font-weight: 900; color: #4a5268; letter-spacing: 0.1em; flex-shrink: 0; }
+
+/* Mode picker — segmented control */
+.scoreboard-picker {
+  display: flex; flex-direction: row;
+  padding: 0 8px; max-height: 0; overflow: hidden;
+  transition: max-height 0.28s cubic-bezier(0.4,0,0.2,1), padding-bottom 0.28s;
+}
+.scoreboard.expanded .scoreboard-picker { max-height: 110px; padding: 0 8px 10px; }
+.scoreboard-picker-inner {
+  display: flex; flex-direction: row;
+  background: #111520; border: 1.5px solid #232940; border-radius: 12px;
+  padding: 4px; gap: 3px; width: 100%;
+}
+.mode-card {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 5px; border-radius: 9px; padding: 8px 4px; cursor: pointer; flex: 1;
+  transition: background 0.15s;
+  background: transparent;
+}
+.mode-card:hover { background: rgba(255,255,255,0.04); }
+.mode-card.active { background: #2a3458; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+.mode-card-icon { font-size: 22px; line-height: 1; }
+.mode-card-label { font-size: 11px; font-weight: 800; color: #4a5478; white-space: nowrap; text-align: center; }
+.mode-card.active .mode-card-label { color: #a0b4e8; }
+.sb-chevron {
+  position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
+  font-size: 7px; color: #3a4260; pointer-events: none; transition: transform 0.25s;
+}
+.scoreboard.expanded .sb-chevron { transform: translateX(-50%) rotate(180deg); }
+
+/* ── Buttons ── */
+.btn {
+  background: #2a3150; border: 1.5px solid #3a4268; border-radius: 12px;
+  padding: 10px 14px; font-size: 12px; font-weight: 800; color: #8a9ac0;
+  cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+  font-family: inherit; letter-spacing: 0.04em; white-space: nowrap; flex-shrink: 0;
+}
+.btn:hover { background: #333d60; color: #c0ccee; border-color: #5060a0; }
+.btn.confirm { background: #3d1e2e; border-color: #8b3a5a; color: #ff7aa8; }
+.btn.confirm:hover { background: #5a1e35; }
+
+/* ── Grids area ── */
+.grids-row {
+  display: flex;
+  flex-direction: row;
+  gap: var(--gap);
+  align-items: flex-start;
+  width: 100%;
+  padding: 0 8px;
+}
+
+.board-card {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  flex: 1 1 0; min-width: 0;
+}
+.layer-label {
+  order: 2; font-size: 9px; font-weight: 800; color: #6b7591;
+  letter-spacing: 0.14em; text-transform: uppercase;
+}
+.grid-box {
+  order: 1; background: #1e2128; border-radius: var(--card-radius);
+  padding: var(--grid-pad);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+  width: 100%;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  aspect-ratio: 1 / 1;
+  border: 2px dashed rgba(255,255,255,0.55); border-radius: 10px;
+  overflow: hidden; width: 100%; background: #13151c;
+}
+.cell {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 0; min-height: 0; overflow: hidden;
+  cursor: pointer; transition: background 0.15s; position: relative;
+  border-right: 2px dashed rgba(255,255,255,0.5);
+  border-bottom: 2px dashed rgba(255,255,255,0.5);
+}
+.cell-inner {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; pointer-events: none;
+}
+.cell:hover { background: rgba(255,255,255,0.04); }
+.cell:nth-child(4n) { border-right: none; }
+.cell:nth-last-child(-n+4) { border-bottom: none; }
+.cell.occupied { cursor: default; }
+.grids-row.game-over .cell { cursor: default !important; }
+.grids-row.game-over .cell:not(.win-cell):hover { background: transparent; }
+.grids-row.ai-thinking .cell { cursor: default !important; pointer-events: none; }
+.grids-row.grid-waiting .cell { cursor: default !important; pointer-events: none; }
+.grids-row.grid-waiting .cell:hover { background: transparent !important; }
+.cell.win-cell { animation: winPulse 0.8s ease-in-out infinite alternate; }
+.cell.last-move { background: rgba(120,160,255,0.10); }
+.cell.last-move:hover { background: rgba(120,160,255,0.16); }
+@keyframes winPulse {
+  from { background: rgba(255,220,80,0.12); }
+  to   { background: rgba(255,220,80,0.28); }
+}
+.token {
+  font-size: var(--token-size);
+  line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  filter: drop-shadow(0 2px 5px rgba(0,0,0,0.6));
+  animation: popIn 0.18s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events: none;
+}
+@keyframes popIn {
+  from { transform: scale(0.4); opacity: 0.5; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+/* ── Badges ── */
+.ai-badge {
+  font-size: 8px; font-weight: 900; letter-spacing: 0.08em;
+  background: #2a3a6a; color: #7090ff; border-radius: 4px; padding: 1px 4px;
+  text-transform: uppercase; flex-shrink: 0;
+}
+.thinking-dots { display: inline-block; animation: thinkingPulse 0.9s ease-in-out infinite; }
+@keyframes thinkingPulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+/* ── Win splash ── */
+#win-banner {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  z-index: 100; pointer-events: none;
+}
+.splash {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center; opacity: 0; transform: scale(0.7) translateY(20px); pointer-events: none;
+}
+#win-banner.show .splash { animation: splashIn 2.8s cubic-bezier(0.22,1,0.36,1) forwards; }
+@keyframes splashIn {
+  0%   { opacity: 0; transform: scale(0.6) translateY(30px); }
+  18%  { opacity: 1; transform: scale(1.08) translateY(-6px); }
+  30%  { transform: scale(1) translateY(0); }
+  65%  { opacity: 1; transform: scale(1) translateY(0); }
+  100% { opacity: 0; transform: scale(0.95) translateY(-16px); }
+}
+.splash-emoji { font-size: 72px; filter: drop-shadow(0 6px 24px rgba(0,0,0,0.6)); animation: none; }
+#win-banner.show .splash-emoji { animation: splashBounce 2.8s cubic-bezier(0.22,1,0.36,1) forwards; }
+@keyframes splashBounce {
+  0%   { transform: scale(0.5) rotate(-10deg); }
+  20%  { transform: scale(1.2) rotate(6deg); }
+  35%  { transform: scale(0.95) rotate(-2deg); }
+  50%  { transform: scale(1) rotate(0deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.splash-title {
+  font-size: 42px; font-weight: 900; color: #fff; letter-spacing: -0.02em;
+  text-shadow: 0 4px 24px rgba(0,0,0,0.7), 0 0 60px rgba(255,220,100,0.3);
+}
+.splash-sub { font-size: 15px; font-weight: 700; color: rgba(255,255,255,0.55); letter-spacing: 0.04em; }
+
+/* ── Dev panel ── */
+#dev-panel {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: rgba(10,12,20,0.92); border-top: 1px solid #2a3048;
+  padding: 8px 24px; display: none; gap: 32px; align-items: center;
+  font-size: 11px; font-weight: 700; color: #5a6580; letter-spacing: 0.04em;
+}
+#dev-panel.visible { display: flex; }
+.dev-stat span { color: #8a9ac0; margin-left: 5px; }
+.dev-draw-warn { color: #ff9060 !important; }
+.zoom-hint {
+  position: fixed; bottom: 14px; right: 18px;
+  font-size: 10px; font-weight: 700; color: #2a3048; pointer-events: none;
+}
+.dev-hint {
+  position: fixed; bottom: 14px; left: 18px;
+  font-size: 10px; font-weight: 700; color: #2a3048; pointer-events: none;
+}
+#dev-panel.visible ~ .zoom-hint,
+#dev-panel.visible ~ .dev-hint { bottom: 44px; }
+
+/* ══════════════════════════════════════════════════
+   RESPONSIVE LAYOUT
+   ══════════════════════════════════════════════════ */
+
+/* ── Desktop landscape: fixed card widths, scroll-zoom enabled ── */
+@media (min-width: 960px) {
+  .board-card { width: 220px; flex: none; }
+  .grids-row { flex-direction: row; width: fit-content; padding: 0; min-width: min(880px, 100%); }
+}
+
+/* ── Tablet / mid landscape: fluid cards ── */
+@media (max-width: 959px) {
+  :root { --token-size: 22px; --avatar-size: 34px; --score-font: 18px; --name-font: 11px; --grid-pad: 8px; --gap: 8px; }
+  .grids-row { flex-direction: row; }
+  .board-card { flex: 1 1 0; }
+  #zoom-root { gap: 8px; }
+  .top-bar { gap: 8px; }
+  .turn-indicator { padding: 7px 10px; font-size: 11px; min-width: 90px; }
+  .scoreboard-row { padding: 8px 12px 10px; gap: 10px; }
+  .splash-title { font-size: 32px; }
+}
+
+/* ── Small phone landscape (very short screens) ── */
+@media (max-height: 450px) {
+  :root { --token-size: 16px; --avatar-size: 28px; --score-font: 14px; --name-font: 10px; --grid-pad: 5px; --gap: 5px; }
+  .turn-indicator { display: none; }
+  .scoreboard-row { padding: 5px 10px 7px; gap: 6px; }
+  .btn { padding: 6px 8px; font-size: 10px; }
+  #dev-panel, .dev-hint, .zoom-hint { display: none !important; }
+}
+
+
+/* ── 3D view overlay ── */
+#view3d-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: none; flex-direction: column; align-items: center;
+  background: radial-gradient(ellipse at 50% 60%, #1e2540 0%, #111520 100%);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+#view3d-overlay.active { display: flex; }
+#three-canvas {
+  flex: 1; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none;
+}
+#three-canvas:active { cursor: grabbing; }
+.btn-exit3d {
+  position: absolute; top: 16px; right: 16px;
+  background: rgba(30,35,55,0.85); border-color: #3a4268;
+  color: #8a9ac0; backdrop-filter: blur(8px);
+  padding: 8px 14px; font-size: 12px;
+  z-index: 10;
+}
+.btn-exit3d:hover { background: rgba(50,60,90,0.9); color: #c0ccee; border-color: #5060a0; }
+#view3d-hint {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  font-size: 11px; font-weight: 700; color: #3a4268; letter-spacing: 0.05em;
+  pointer-events: none; white-space: nowrap;
+}
+.btn-3d {
+  background: #1e2a4a; border-color: #3a5090; color: #7090ff;
+}
+.btn-3d:hover { background: #253562; border-color: #5070c0; color: #90b0ff; }
+.btn-3d.active { background: #253562; border-color: #5070c0; color: #90b0ff;
+  box-shadow: 0 0 12px rgba(100,140,255,0.3); }
+
+
+/* ── 3D slice slider ── */
+#slice-control {
+  position: absolute;
+  bottom: 48px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px;
+  z-index: 10; pointer-events: auto;
+}
+#slice-label {
+  font-size: 10px; font-weight: 800; color: #4a5880;
+  letter-spacing: 0.08em; white-space: nowrap; min-width: 52px; text-align: right;
+}
+#slice-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 140px; height: 4px;
+  background: linear-gradient(to right, #3a5090 0%, #3a5090 var(--pct,0%), #1e2540 var(--pct,0%), #1e2540 100%);
+  border-radius: 2px; outline: none; cursor: pointer;
+}
+#slice-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px;
+  border-radius: 50%; background: #7090ff;
+  border: 2px solid #2a3a6a; cursor: pointer;
+  box-shadow: 0 0 8px rgba(100,140,255,0.4);
+}
+#slice-slider::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #7090ff; border: 2px solid #2a3a6a; cursor: pointer;
+}
+/* ── Layer number labels (rendered via CSS absolutely, updated in JS) ── */
+.layer3d-label {
+  position: absolute;
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px; font-weight: 800;
+  color: #5a7aaa; letter-spacing: 0.1em;
+  pointer-events: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+}
+
+/* Abandon confirm overlay */
+#abandon-confirm {
+  position: fixed; inset: 0; z-index: 210;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(8,10,18,0.88);
+}
+#abandon-confirm.active { display: flex; }
+.abandon-panel {
+  background: #1e1a2e; border: 1.5px solid #5a3a6a;
+  border-radius: 20px; padding: 28px 32px;
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  text-align: center; box-shadow: 0 16px 60px rgba(0,0,0,0.6); max-width: 320px;
+}
+.abandon-panel .ab-icon { font-size: 36px; }
+.abandon-panel .ab-title { font-size: 17px; font-weight: 900; color: #d890b0; }
+.abandon-panel .ab-sub { font-size: 12px; font-weight: 700; color: #6a4a7a; line-height: 1.5; }
+.abandon-panel .ab-btns { display: flex; gap: 10px; width: 100%; }
+.abandon-panel .ab-btns .btn { flex: 1; }
+
+/* Abandoned-by-opponent banner inside disconnect panel */
+#disconnect-banner.abandoned .disc-icon::after { content: ''; }
+
+/* ══════════════════════════════════════════════════
+   ONLINE MULTIPLAYER UI
+   ══════════════════════════════════════════════════ */
+
+/* Online status badge */
+.online-badge {
+  font-size: 8px; font-weight: 900; letter-spacing: 0.08em;
+  border-radius: 4px; padding: 1px 5px;
+  text-transform: uppercase; flex-shrink: 0;
+}
+.online-badge.connected    { background: #1a3a2a; color: #50d890; }
+.online-badge.waiting      { background: #2a2a1a; color: #d8b050; }
+.online-badge.disconnected { background: #3a1a1a; color: #d85050; }
+
+/* Full-screen modal overlay */
+#online-modal {
+  position: fixed; inset: 0; z-index: 200;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(8,10,18,0.92);
+}
+#online-modal.active { display: flex; }
+
+.online-panel {
+  background: #191e2d;
+  border: 1.5px solid #2a3356;
+  border-radius: 24px;
+  padding: 32px 28px 24px;
+  width: min(400px, 92vw);
+  display: flex; flex-direction: column; align-items: center; gap: 20px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04);
+}
+.online-panel h2 {
+  font-size: 22px; font-weight: 900; color: #c8d4f0;
+  letter-spacing: -0.02em; text-align: center; margin: 0;
+}
+.online-panel .sub {
+  font-size: 12px; font-weight: 700; color: #4a5878;
+  text-align: center; margin-top: -12px;
+}
+
+/* Two action buttons side by side */
+.online-choices {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%;
+}
+.online-choice-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: #1e2438; border: 1.5px solid #2e3a58; border-radius: 16px;
+  padding: 18px 10px; cursor: pointer; transition: background 0.15s, border-color 0.15s;
+  font-family: inherit;
+}
+.online-choice-btn:hover { background: #242c48; border-color: #4a5898; }
+.online-choice-btn .choice-icon { font-size: 28px; line-height: 1; }
+.online-choice-btn .choice-label {
+  font-size: 11px; font-weight: 800; color: #8898c8;
+  letter-spacing: 0.04em; text-align: center;
+}
+
+/* Waiting / code display screen */
+.online-waiting {
+  display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%;
+}
+.game-code-display {
+  font-size: 52px; font-weight: 900; letter-spacing: 0.18em;
+  color: #fff; text-align: center;
+  text-shadow: 0 0 30px rgba(100,140,255,0.5);
+  font-variant-numeric: tabular-nums;
+}
+.game-code-label {
+  font-size: 10px; font-weight: 800; color: #3a4878;
+  letter-spacing: 0.14em; text-transform: uppercase; text-align: center;
+}
+.online-waiting-msg {
+  font-size: 12px; font-weight: 700; color: #4a5878;
+  text-align: center; line-height: 1.5;
+}
+.waiting-dots { display: inline-block; animation: thinkingPulse 1s ease-in-out infinite; }
+
+/* Join screen — code input */
+.code-input-row {
+  display: flex; gap: 8px; align-items: center; width: 100%;
+}
+.code-input {
+  width: 100%; font-family: inherit; font-size: 28px; font-weight: 900;
+  text-align: center; letter-spacing: 0.2em; text-transform: uppercase;
+  background: #141824; border: 2px solid #2a3356; border-radius: 12px;
+  color: #fff; padding: 12px 8px 12px calc(8px + 0.2em); outline: none;
+  transition: border-color 0.2s; box-sizing: border-box;
+}
+.code-input:focus { border-color: #5070c0; }
+.code-input::placeholder { color: #2a3356; letter-spacing: 0.2em; }
+
+/* Back button */
+.btn-back {
+  background: transparent; border-color: #2a3050; color: #4a5878;
+  font-size: 11px; padding: 7px 14px;
+}
+.btn-back:hover { background: #1e2438; color: #8898c8; border-color: #3a4878; }
+
+/* Disconnect overlay on board */
+#disconnect-banner {
+  position: fixed; inset: 0; z-index: 150;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(8,10,18,0.75); backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+#disconnect-banner.active { display: flex; pointer-events: auto; }
+.disconnect-panel {
+  background: #1e1a2e; border: 1.5px solid #5a3a6a;
+  border-radius: 20px; padding: 28px 32px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  text-align: center; box-shadow: 0 16px 60px rgba(0,0,0,0.6);
+}
+.disconnect-panel .disc-icon { font-size: 40px; }
+.disconnect-panel .disc-title { font-size: 18px; font-weight: 900; color: #d890b0; }
+.disconnect-panel .disc-sub { font-size: 12px; font-weight: 700; color: #6a4a7a; }
+
+</style>
+</head>
+<body>
+
+<div id="zoom-root">
+  <div class="top-bar">
+    <div class="turn-indicator" id="turn-indicator">…</div>
+    <div class="scoreboard" id="scoreboard" onclick="toggleScoreboardExpand(event)"></div>
+    <div style="display:flex;gap:6px;flex-shrink:0">
+      <button class="btn btn-3d" id="view3d-btn" onclick="toggle3D()">⬡ 3D</button>
+      <button class="btn" id="new-game-btn">New Game</button>
+    </div>
+  </div>
+  <div class="grids-row" id="grids-row"></div>
+</div>
+
+<div id="win-banner">
+  <div class="splash">
+    <div class="splash-emoji" id="banner-emoji">🎉</div>
+    <div class="splash-title" id="banner-title">Player Wins!</div>
+    <div class="splash-sub" id="banner-sub">Four in a row!</div>
+  </div>
+</div>
+
+
+
+<!-- Online Multiplayer Modal -->
+<div id="online-modal">
+  <div class="online-panel" id="online-panel-inner">
+    <!-- content injected by JS -->
+  </div>
+</div>
+
+<!-- Disconnect Banner -->
+<div id="disconnect-banner">
+  <div class="disconnect-panel">
+    <div class="disc-icon">🔌</div>
+    <div class="disc-title">Opponent disconnected</div>
+    <div class="disc-sub">Waiting for them to reconnect…</div>
+    <button class="btn btn-back" onclick="abandonOnlineGame()">Abandon game</button>
+  </div>
+</div>
+
+<!-- 3D View Overlay -->
+<div id="view3d-overlay">
+  <canvas id="three-canvas"></canvas>
+  <button class="btn btn-exit3d" id="exit3d-btn" onclick="toggle3D()">✕ Exit 3D</button>
+  <div id="slice-control">
+    <span id="slice-label">ASSEMBLED</span>
+    <input id="slice-slider" type="range" min="0" max="100" value="0"
+      oninput="onSliceInput(this.value)" style="--pct:0%">
+  </div>
+  <div id="view3d-hint">drag to rotate · scroll to zoom</div>
+</div>
+
+<div id="dev-panel">
+  <div class="dev-stat">🍩 winning lines: <span id="dev-lines-o">—</span></div>
+  <div class="dev-stat">🧁 winning lines: <span id="dev-lines-x">—</span></div>
+  <div class="dev-stat">Cells left: <span id="dev-cells">—</span></div>
+  <div class="dev-stat" id="dev-draw-stat">Draw?: <span id="dev-draw">—</span></div>
+</div>
+<div class="zoom-hint">scroll to zoom</div>
+<div class="dev-hint">press D for dev mode</div>
+
+<div id="abandon-confirm">
+  <div class="abandon-panel">
+    <div class="ab-icon">⚠️</div>
+    <div class="ab-title">Abandon online game?</div>
+    <div class="ab-sub">Your opponent will be notified and the game will end for both players.</div>
+    <div class="ab-btns">
+      <button class="btn btn-back" onclick="cancelAbandon()">Keep playing</button>
+      <button class="btn confirm" onclick="confirmAbandon()">Abandon</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── PWA service worker registration ──
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+// ── Early state declarations (must precede all render functions) ──
+let three = null;
+let is3D = false;
+let pendingModeSwitch = null; // mode type to switch to after abandon confirm
+// onlineState declared here so renderScoreboard can reference it before Firebase loads
+let onlineState = {
+  gameCode: null, myRole: null, myName: null,
+  gameRef: null, unsubscribe: null, opponentConnected: false,
+};
+
+// ── Mobile detection ──
+const isMobile = () => window.innerWidth < 960 || window.innerHeight < 450;
+
+// ═══════════════════════════════════════════════
+// EMOJI PAIRS & NAMES
+// ═══════════════════════════════════════════════
+const EMOJI_PAIRS = [
+  ['🍩','🧁'], ['🍕','🌮'], ['🍔','🌭'], ['🍣','🍜'],
+  ['🦊','🐼'], ['🐸','🐙'], ['🦄','🐲'], ['🐶','🐱'],
+  ['🚀','🛸'], ['⚡','🔥'], ['🍎','🍊'], ['🎸','🎹'],
+  ['🌵','🌴'], ['💎','👑'], ['🎃','👻'], ['🤖','👾'],
+];
+const NAMES_A = ['Donut Dan','Pixel Pete','Cosmo','Blaze','Rex','Zephyr','Orbit','Chunk','Nova','Turbo'];
+const NAMES_B = ['Cupcake Kim','Starla','Nimbus','Vex','Luna','Spark','Echo','Glitch','Comet','Prism'];
+function randName(pool) { return pool[Math.floor(Math.random() * pool.length)]; }
+function randPair() {
+  const used = gs ? gs.emojiPair : null;
+  let pair;
+  do { pair = EMOJI_PAIRS[Math.floor(Math.random() * EMOJI_PAIRS.length)]; }
+  while (used && pair[0] === used[0]);
+  return pair;
+}
+
+// ═══════════════════════════════════════════════
+// WIN LINES — all 76 in a 4×4×4 cube
+// ═══════════════════════════════════════════════
+function buildWinLines() {
+  const lines = [];
+  for (let l = 0; l < 4; l++) {
+    for (let r = 0; r < 4; r++) lines.push([[l,r,0],[l,r,1],[l,r,2],[l,r,3]]);
+    for (let c = 0; c < 4; c++) lines.push([[l,0,c],[l,1,c],[l,2,c],[l,3,c]]);
+    lines.push([[l,0,0],[l,1,1],[l,2,2],[l,3,3]]);
+    lines.push([[l,0,3],[l,1,2],[l,2,1],[l,3,0]]);
+  }
+  for (let r = 0; r < 4; r++)
+    for (let c = 0; c < 4; c++)
+      lines.push([[0,r,c],[1,r,c],[2,r,c],[3,r,c]]);
+  for (let r = 0; r < 4; r++) {
+    lines.push([[0,r,0],[1,r,1],[2,r,2],[3,r,3]]);
+    lines.push([[0,r,3],[1,r,2],[2,r,1],[3,r,0]]);
+  }
+  for (let c = 0; c < 4; c++) {
+    lines.push([[0,0,c],[1,1,c],[2,2,c],[3,3,c]]);
+    lines.push([[0,3,c],[1,2,c],[2,1,c],[3,0,c]]);
+  }
+  lines.push([[0,0,0],[1,1,1],[2,2,2],[3,3,3]]);
+  lines.push([[0,0,3],[1,1,2],[2,2,1],[3,3,0]]);
+  lines.push([[0,3,0],[1,2,1],[2,1,2],[3,0,3]]);
+  lines.push([[0,3,3],[1,2,2],[2,1,1],[3,0,0]]);
+  return lines;
+}
+const WIN_LINES = buildWinLines();
+
+// ═══════════════════════════════════════════════
+// GAME STATE
+// ═══════════════════════════════════════════════
+let gs;
+function emptyBoard() {
+  return Array.from({length:4}, () => Array.from({length:4}, () => Array(4).fill(null)));
+}
+function defaultState() {
+  return {
+    board: emptyBoard(), turn: 'O', gameOver: false,
+    scores: {O:0, X:0},
+    names: {O: randName(NAMES_A), X: randName(NAMES_B)},
+    emojiPair: randPair(),
+    playerXType: 'ai-hard',
+  };
+}
+function saveState() { try { localStorage.setItem('4iar3d', JSON.stringify(gs)); } catch(e) {} }
+function loadState() {
+  try {
+    const r = localStorage.getItem('4iar3d');
+    if (r) {
+      const saved = JSON.parse(r);
+      const def = defaultState();
+      // Merge: use saved values where valid, fall back to defaults for anything missing/corrupt
+      gs = {
+        board:       (Array.isArray(saved.board) && saved.board.length === 4) ? saved.board : def.board,
+        turn:        (saved.turn === 'O' || saved.turn === 'X') ? saved.turn : def.turn,
+        gameOver:    typeof saved.gameOver === 'boolean' ? saved.gameOver : def.gameOver,
+        scores:      (saved.scores && typeof saved.scores.O === 'number') ? saved.scores : def.scores,
+        names:       (saved.names && saved.names.O && saved.names.X) ? saved.names : def.names,
+        emojiPair:   (Array.isArray(saved.emojiPair) && saved.emojiPair.length === 2) ? saved.emojiPair : def.emojiPair,
+        playerXType: saved.playerXType || def.playerXType,
+      };
+      return;
+    }
+  } catch(e) {}
+  gs = defaultState();
+}
+
+// ═══════════════════════════════════════════════
+// RENDER — scoreboard
+// ═══════════════════════════════════════════════
+let sbExpanded = false;
+
+function renderScoreboard() {
+  const sb = document.getElementById('scoreboard');
+  const isOActive = gs.turn === 'O' && !gs.gameOver;
+  const isXActive = gs.turn === 'X' && !gs.gameOver;
+  const xIsAI = gs.playerXType === 'ai-easy' || gs.playerXType === 'ai-hard';
+  const xThinking = isXActive && xIsAI;
+  const aiDifficulty = gs.playerXType === 'ai-easy' ? 'EASY' : gs.playerXType === 'ai-hard' ? 'HARD' : '';
+
+  sb.classList.toggle('expanded', sbExpanded);
+  const isOnlineMode = gs.playerXType === 'online';
+  // Badge shows connection status of the OPPONENT (always next to the other player's name)
+  const onlineBadgeHtml = isOnlineMode
+    ? `<span class="online-badge ${onlineState.opponentConnected ? 'connected' : 'waiting'}">${onlineState.opponentConnected ? '● ONLINE' : '○ WAITING'}</span>`
+    : '';
+  // If I'm O (host), opponent is X → badge on X. If I'm X (guest), opponent is O → badge on O.
+  const badgeOnO = isOnlineMode && onlineState.myRole === 'X';
+  const badgeOnX = isOnlineMode && onlineState.myRole === 'O';
+
+  // In online mode only your own name is editable
+  const nameO = isOnlineMode
+    ? (onlineState.myRole === 'O'
+        ? `<span class="player-name" data-player="O">${gs.names.O}</span>`
+        : `<span class="player-name">${gs.names.O}</span>`)
+    : `<span class="player-name" data-player="O">${gs.names.O}</span>`;
+  const nameX = isOnlineMode
+    ? (onlineState.myRole === 'X'
+        ? `<span class="player-name" data-player="X">${gs.names.X}</span>`
+        : `<span class="player-name">${gs.names.X}</span>`)
+    : `<span class="player-name" data-player="X">${gs.names.X}</span>`;
+
+  sb.innerHTML = `
+    <div class="scoreboard-row">
+      <div class="player-slot ${isOActive?'active-o':''} ${!gs.gameOver&&!isOActive?'inactive':''}" id="slot-o">
+        <div class="player-avatar">${gs.emojiPair[0]}</div>
+        <div class="player-info">
+          <div class="player-name-wrap">${nameO}${badgeOnO ? onlineBadgeHtml : ''}</div>
+          <div class="player-score">${gs.scores.O}</div>
+        </div>
+      </div>
+      <div class="vs-divider">VS</div>
+      <div class="player-slot ${isXActive?'active-x':''} ${!gs.gameOver&&!isXActive?'inactive':''}" id="slot-x">
+        <div class="player-avatar">${gs.emojiPair[1]}</div>
+        <div class="player-info">
+          <div class="player-name-wrap">${nameX}${badgeOnX ? onlineBadgeHtml : (xIsAI ? '<span class="ai-badge">AI</span>' : '')}</div>
+          <div class="player-score">${gs.scores.X}</div>
+        </div>
+      </div>
+    </div>
+    <div class="scoreboard-picker">
+      <div class="scoreboard-picker-inner">
+        <div class="mode-card ${!xIsAI && !isOnlineMode?'active':''}" onclick="pickMode(event,'human')">
+          <div class="mode-card-icon">👥</div>
+          <div class="mode-card-label">Local 2P</div>
+        </div>
+        <div class="mode-card ${gs.playerXType==='ai-easy'?'active':''}" onclick="pickMode(event,'ai-easy')">
+          <div class="mode-card-icon">🤖</div>
+          <div class="mode-card-label">Easy AI</div>
+        </div>
+        <div class="mode-card ${gs.playerXType==='ai-hard'?'active':''}" onclick="pickMode(event,'ai-hard')">
+          <div class="mode-card-icon">💀</div>
+          <div class="mode-card-label">Hard AI</div>
+        </div>
+        <div class="mode-card ${isOnlineMode?'active':''}" onclick="pickMode(event,'online')">
+          <div class="mode-card-icon">🌐</div>
+          <div class="mode-card-label">Online</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-chevron">▼</div>
+  `;
+
+  const ti = document.getElementById('turn-indicator');
+  if (!gs.gameOver) {
+    if (xThinking) {
+      ti.innerHTML = `${emojiFor('X')} <span class="thinking-dots">thinking…</span>`;
+    } else {
+      // Determine if this is "your turn"
+      const isYourTurn =
+        ((gs.playerXType === 'ai-easy' || gs.playerXType === 'ai-hard') && gs.turn === 'O') ||
+        (gs.playerXType === 'online' && gs.turn === onlineState.myRole);
+      const label = isYourTurn
+        ? `${emojiFor(gs.turn)} Your turn`
+        : `${emojiFor(gs.turn)} ${gs.names[gs.turn]}'s turn`;
+      ti.textContent = label;
+    }
+    ti.className = `turn-indicator active-${gs.turn.toLowerCase()}`;
+  }
+  const gr = document.getElementById('grids-row');
+  if (gr) {
+    gr.classList.toggle('game-over', !!gs.gameOver);
+    const isOnlineWaiting = gs.playerXType === 'online' && (
+      gs.turn !== onlineState.myRole ||
+      !onlineState.opponentConnected
+    );
+    gr.classList.toggle('grid-waiting', !!isOnlineWaiting);
+  }
+  // New Game button: guests in online mode can't start a new game
+  const ngBtn = document.getElementById('new-game-btn');
+  if (ngBtn) {
+    const isOnlineGuest = gs.playerXType === 'online' && onlineState.myRole === 'X';
+    if (isOnlineGuest) {
+      ngBtn.style.visibility = 'hidden';
+      ngBtn.style.pointerEvents = 'none';
+    } else {
+      ngBtn.style.visibility = '';
+      ngBtn.style.pointerEvents = '';
+      // Don't clobber confirm state text
+      if (!newGameConfirm) ngBtn.textContent = 'New Game';
+    }
+  }
+  updateDevPanel();
+}
+
+function toggleScoreboardExpand(e) {
+  if (e.target.closest('.player-name') || e.target.closest('.scoreboard-picker-inner') || e.target.closest('.ai-badge')) return;
+  sbExpanded = !sbExpanded;
+  document.getElementById('scoreboard').classList.toggle('expanded', sbExpanded);
+}
+function pickMode(e, type) {
+  e.stopPropagation();
+  sbExpanded = false;
+  document.getElementById('scoreboard').classList.remove('expanded');
+
+  if (type === 'online') {
+    showOnlineModal('choose');
+    return;
+  }
+
+  // Leaving online mode — always ask to confirm while session exists
+  if (gs.playerXType === 'online') {
+    if (onlineState.gameRef) {
+      pendingModeSwitch = type;
+      document.getElementById('abandon-confirm').classList.add('active');
+      return;
+    }
+    leaveOnlineGame();
+  }
+
+  const wasOver = gs.gameOver;
+  gs.playerXType = type; saveState();
+  if (wasOver) {
+    startNewGame(false);
+  } else {
+    renderScoreboard(); maybeScheduleAI();
+  }
+}
+
+function cancelAbandon() {
+  pendingModeSwitch = null;
+  document.getElementById('abandon-confirm').classList.remove('active');
+}
+
+function confirmAbandon() {
+  document.getElementById('abandon-confirm').classList.remove('active');
+  const type = pendingModeSwitch;
+  pendingModeSwitch = null;
+  // Write abandoned flag so opponent is notified via their listener
+  if (onlineState.gameRef) {
+    onlineState.gameRef.update({ abandoned: true, abandonedBy: onlineState.myRole });
+  }
+  leaveOnlineGame();
+  gs.playerXType = type; saveState();
+  startNewGame(false);
+}
+
+// ═══════════════════════════════════════════════
+// RENDER — full board
+// ═══════════════════════════════════════════════
+function emojiFor(val) { return val === 'O' ? gs.emojiPair[0] : gs.emojiPair[1]; }
+function renderToken(val, animate = false) {
+  if (!val) return '';
+  const style = animate ? '' : ' style="animation:none"';
+  return `<div class="cell-inner"><div class="token"${style}>${emojiFor(val)}</div></div>`;
+}
+
+let winCells = new Set();
+let lastMove = null;  // {l,r,c} of most recently placed token
+
+function renderBoard() {
+  renderScoreboard();
+  const gr = document.getElementById('grids-row');
+  gr.innerHTML = '';
+  for (let l = 0; l < 4; l++) {
+    const card = document.createElement('div');
+    card.className = 'board-card';
+    const box = document.createElement('div');
+    box.className = 'grid-box';
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        const cell = document.createElement('div');
+        const val = gs.board[l][r][c];
+        const key = `${l},${r},${c}`;
+        const isWin  = winCells.has(key);
+        const isLast = !isWin && !!lastMove && lastMove.l===l && lastMove.r===r && lastMove.c===c;
+        let cls = 'cell';
+        if (val)    cls += ' occupied';
+        if (isWin)  cls += ' win-cell';
+        if (isLast) cls += ' last-move';
+        cell.className = cls;
+        cell.dataset.l = l; cell.dataset.r = r; cell.dataset.c = c;
+        // Animate only the most-recently-placed token; all others skip the popIn
+        if (val) cell.innerHTML = renderToken(val, isLast);
+        grid.appendChild(cell);
+      }
+    }
+    box.appendChild(grid);
+    card.appendChild(box);
+    const lbl = document.createElement('div');
+    lbl.className = 'layer-label';
+    lbl.textContent = `Layer ${l+1}`;
+    card.appendChild(lbl);
+    gr.appendChild(card);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// GAME LOGIC
+// ═══════════════════════════════════════════════
+function checkWin(player) {
+  for (const line of WIN_LINES)
+    if (line.every(([l,r,c]) => gs.board[l][r][c] === player)) return line;
+  return null;
+}
+function checkDraw() {
+  for (let l=0;l<4;l++) for (let r=0;r<4;r++) for (let c=0;c<4;c++)
+    if (!gs.board[l][r][c]) return false;
+  return true;
+}
+function countOpenLines(player) {
+  const opp = player === 'O' ? 'X' : 'O';
+  return WIN_LINES.filter(line => line.every(([l,r,c]) => gs.board[l][r][c] !== opp)).length;
+}
+function isInevitableDraw() { return countOpenLines('O') === 0 && countOpenLines('X') === 0; }
+
+// ═══════════════════════════════════════════════
+// AI
+// ═══════════════════════════════════════════════
+function scoreLineFor(line, player) {
+  const opp = player === 'O' ? 'X' : 'O';
+  let mine = 0, oppC = 0;
+  for (const [l,r,c] of line) {
+    const v = gs.board[l][r][c];
+    if (v === player) mine++;
+    else if (v === opp) oppC++;
+  }
+  return oppC === 0 ? mine : -1;
+}
+function getEmptyCells() {
+  const cells = [];
+  for (let l=0;l<4;l++) for (let r=0;r<4;r++) for (let c=0;c<4;c++)
+    if (!gs.board[l][r][c]) cells.push([l,r,c]);
+  return cells;
+}
+function aiPickMoveEasy() {
+  // Easy: takes wins, occasionally misses blocks, uses noisy heuristic
+  const me = 'X', opp = 'O';
+  const empty = getEmptyCells();
+  // Always take an immediate win
+  for (const [l,r,c] of empty) {
+    gs.board[l][r][c] = me;
+    if (checkWin(me)) { gs.board[l][r][c] = null; return [l,r,c]; }
+    gs.board[l][r][c] = null;
+  }
+  // Block opponent win ~55% of the time (misses ~45%)
+  if (Math.random() < 0.55) {
+    for (const [l,r,c] of empty) {
+      gs.board[l][r][c] = opp;
+      if (checkWin(opp)) { gs.board[l][r][c] = null; return [l,r,c]; }
+      gs.board[l][r][c] = null;
+    }
+  }
+  // Weak heuristic + heavy random noise — picks from top ~40% of moves
+  const scored = empty.map(([l,r,c]) => {
+    let score = 0;
+    for (const line of WIN_LINES) {
+      if (!line.some(([ll,rr,cc]) => ll===l && rr===r && cc===c)) continue;
+      const myC = scoreLineFor(line, me);
+      if (myC === 2) score += 5; else if (myC === 1) score += 1;
+    }
+    score += Math.random() * 12; // large noise keeps it unpredictable
+    return { move: [l,r,c], score };
+  });
+  scored.sort((a,b) => b.score - a.score);
+  const pool = scored.slice(0, Math.max(1, Math.ceil(scored.length * 0.4)));
+  return pool[Math.floor(Math.random() * pool.length)].move;
+}
+
+function aiPickMove() {
+  const me = 'X', opp = 'O';
+  const empty = getEmptyCells();
+  for (const [l,r,c] of empty) {
+    gs.board[l][r][c] = me;
+    if (checkWin(me)) { gs.board[l][r][c] = null; return [l,r,c]; }
+    gs.board[l][r][c] = null;
+  }
+  for (const [l,r,c] of empty) {
+    gs.board[l][r][c] = opp;
+    if (checkWin(opp)) { gs.board[l][r][c] = null; return [l,r,c]; }
+    gs.board[l][r][c] = null;
+  }
+  let best = -Infinity, bestMoves = [];
+  for (const [l,r,c] of empty) {
+    let score = 0;
+    for (const line of WIN_LINES) {
+      if (!line.some(([ll,rr,cc]) => ll===l && rr===r && cc===c)) continue;
+      const myC = scoreLineFor(line, me);
+      const opC = scoreLineFor(line, opp);
+      if (myC === 3) score += 100; else if (myC === 2) score += 10; else if (myC === 1) score += 2;
+      if (opC === 3) score += 80;  else if (opC === 2) score += 8;
+    }
+    if (score > best) { best = score; bestMoves = [[l,r,c]]; }
+    else if (score === best) bestMoves.push([l,r,c]);
+  }
+  return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+}
+
+let aiThinking = false;
+function maybeScheduleAI() {
+  if (gs.gameOver || gs.turn !== 'X' || (gs.playerXType !== 'ai-easy' && gs.playerXType !== 'ai-hard') || aiThinking) return;
+  aiThinking = true;
+  const gr = document.getElementById('grids-row');
+  if (gr) gr.classList.add('ai-thinking');
+  renderScoreboard();
+  setTimeout(() => {
+    aiThinking = false;
+    if (gr) gr.classList.remove('ai-thinking');
+    if (gs.gameOver || gs.turn !== 'X') return;
+    const move = gs.playerXType === 'ai-easy' ? aiPickMoveEasy() : aiPickMove();
+    if (move) _doPlace(...move);
+  }, 500);
+}
+
+function _doPlace(l, r, c) {
+  if (gs.gameOver || gs.board[l][r][c]) return;
+  gs.board[l][r][c] = gs.turn;
+  lastMove = {l, r, c};
+  _afterPlace();
+}
+
+function placeToken(l, r, c) {
+  if (gs.gameOver || gs.board[l][r][c] || aiThinking) return;
+  if (gs.turn === 'X' && (gs.playerXType === 'ai-easy' || gs.playerXType === 'ai-hard')) return;
+  // Online: only allow moves on our turn
+  if (gs.playerXType === 'online') {
+    if (gs.turn !== onlineState.myRole) return;
+    if (!onlineState.opponentConnected) return;
+    // Write to Firebase — the listener will apply the move for both players
+    lastMove = {l, r, c};
+    onlineWriteMove(l, r, c);
+    return;
+  }
+  gs.board[l][r][c] = gs.turn;
+  lastMove = {l, r, c};
+  _afterPlace();
+}
+
+function _afterPlace() {
+  const winLine = checkWin(gs.turn);
+  if (winLine) {
+    gs.gameOver = true; gs.scores[gs.turn]++;
+    winCells = new Set(winLine.map(([l,r,c]) => `${l},${r},${c}`));
+    saveState(); renderBoard();
+    if (is3D && three) setTimeout(rebuild3D, 60);
+    setTimeout(() => showBanner('win', gs.turn), 400); return;
+  }
+  if (checkDraw()) {
+    gs.gameOver = true; saveState(); renderBoard();
+    if (is3D && three) setTimeout(rebuild3D, 60);
+    setTimeout(() => showBanner('draw', null), 400); return;
+  }
+  if (isInevitableDraw()) {
+    gs.gameOver = true; saveState(); renderBoard();
+    if (is3D && three) setTimeout(rebuild3D, 60);
+    setTimeout(() => showBanner('inevitable', null), 400); return;
+  }
+  gs.turn = gs.turn === 'O' ? 'X' : 'O';
+  saveState(); renderBoard(); maybeScheduleAI();
+  if (is3D && three) setTimeout(rebuild3D, 60);
+}
+
+// ═══════════════════════════════════════════════
+// BANNER
+// ═══════════════════════════════════════════════
+function showBanner(type, player) {
+  const banner = document.getElementById('win-banner');
+  const emoji = document.getElementById('banner-emoji');
+  const title = document.getElementById('banner-title');
+  const sub   = document.getElementById('banner-sub');
+  if (type === 'win') {
+    emoji.textContent = emojiFor(player);
+    title.textContent = `${gs.names[player]} wins!`;
+    sub.textContent = 'Four in a row — brilliant!';
+  } else if (type === 'draw') {
+    emoji.textContent = '🤝'; title.textContent = "It's a draw!";
+    sub.textContent = 'Every cell filled. Nobody wins this round.';
+  } else {
+    emoji.textContent = '🙃'; title.textContent = "Inevitable draw";
+    sub.textContent = 'No winning lines remain for either player.';
+  }
+  const ti = document.getElementById('turn-indicator');
+  if (type === 'win') {
+    ti.textContent = `${emojiFor(player)} ${gs.names[player]} wins!`;
+    ti.className = `turn-indicator active-${player.toLowerCase()}`;
+  } else { ti.textContent = "It's a draw!"; ti.className = 'turn-indicator'; }
+  banner.classList.remove('show'); void banner.offsetWidth;
+  banner.classList.add('show');
+  setTimeout(() => banner.classList.remove('show'), 3000);
+}
+function hideBanner() { document.getElementById('win-banner').classList.remove('show'); }
+
+// ═══════════════════════════════════════════════
+// NEW GAME
+// ═══════════════════════════════════════════════
+let newGameConfirm = false, confirmTimer = null;
+
+function isGameInProgress() {
+  for (let l=0;l<4;l++) for (let r=0;r<4;r++) for (let c=0;c<4;c++)
+    if (gs.board[l][r][c]) return !gs.gameOver;
+  return false;
+}
+
+function triggerNewGame() {
+  const btn = document.getElementById('new-game-btn');
+  if (isGameInProgress()) {
+    if (!newGameConfirm) {
+      newGameConfirm = true; btn.textContent = 'Sure?'; btn.classList.add('confirm');
+      confirmTimer = setTimeout(() => {
+        newGameConfirm = false; btn.textContent = 'New Game'; btn.classList.remove('confirm');
+      }, 2500);
+      return;
+    }
+    clearTimeout(confirmTimer);
+    newGameConfirm = false; btn.textContent = 'New Game'; btn.classList.remove('confirm');
+  }
+  startNewGame(true);
+}
+
+function startNewGame(keepScores = true) {
+  hideBanner(); aiThinking = false; sbExpanded = false; winCells = new Set(); lastMove = null;
+  // Online new game — only host can reset
+  if (gs.playerXType === 'online') {
+    if (onlineState.myRole === 'O') {
+      onlineHostNewGame(keepScores);
+    }
+    // Guests just wait — the listener will pick up the reset
+    return;
+  }
+  const scores = keepScores ? {...gs.scores} : {O:0, X:0};
+  const names  = {...gs.names};
+  const p2type = gs.playerXType || 'ai';
+  gs = defaultState();
+  gs.scores = scores; gs.names = names; gs.playerXType = p2type;
+  saveState(); renderBoard(); maybeScheduleAI();
+  if (is3D && three) setTimeout(rebuild3D, 100);
+}
+
+// ═══════════════════════════════════════════════
+// EDITABLE NAMES
+// ═══════════════════════════════════════════════
+function startEditName(player) {
+  const span = document.querySelector(`.player-name[data-player="${player}"]`);
+  if (!span) return;
+  const input = document.createElement('input');
+  input.className = 'player-name-input';
+  input.value = gs.names[player]; input.maxLength = 16;
+  span.replaceWith(input); input.focus(); input.select();
+  function commit() {
+    const newName = input.value.trim() || gs.names[player];
+    gs.names[player] = newName;
+    saveState();
+    // In online mode, sync name change to Firebase immediately
+    if (gs.playerXType === 'online' && onlineState.gameRef) {
+      onlineState.gameRef.update({ [`names/${player}`]: newName });
+    }
+    renderBoard();
+  }
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') { input.removeEventListener('blur', commit); renderBoard(); }
+  });
+}
+
+// ═══════════════════════════════════════════════
+// DEV PANEL
+// ═══════════════════════════════════════════════
+let devMode = false;
+function toggleDevMode() {
+  if (isMobile()) return;
+  devMode = !devMode;
+  document.getElementById('dev-panel').classList.toggle('visible', devMode);
+  if (devMode) updateDevPanel();
+}
+function updateDevPanel() {
+  if (!devMode) return;
+  const lo = countOpenLines('O'), lx = countOpenLines('X');
+  let cells = 0;
+  for (let l=0;l<4;l++) for (let r=0;r<4;r++) for (let c=0;c<4;c++) if (!gs.board[l][r][c]) cells++;
+  document.getElementById('dev-lines-o').textContent = lo;
+  document.getElementById('dev-lines-x').textContent = lx;
+  document.getElementById('dev-cells').textContent = cells;
+  const inevitable = !gs.gameOver && lo === 0 && lx === 0;
+  document.getElementById('dev-draw').textContent = inevitable ? 'YES ⚠️' : 'No';
+  document.getElementById('dev-draw-stat').querySelector('span').className = inevitable ? 'dev-draw-warn' : '';
+}
+
+// ═══════════════════════════════════════════════
+// EVENT LISTENERS
+// ═══════════════════════════════════════════════
+document.getElementById('grids-row').addEventListener('click', e => {
+  const cell = e.target.closest('.cell');
+  if (!cell) return;
+  placeToken(+cell.dataset.l, +cell.dataset.r, +cell.dataset.c);
+});
+
+document.getElementById('scoreboard').addEventListener('click', e => {
+  const nameEl = e.target.closest('.player-name');
+  if (nameEl) { e.stopPropagation(); startEditName(nameEl.dataset.player); }
+});
+
+document.getElementById('new-game-btn').addEventListener('click', triggerNewGame);
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && sbExpanded) {
+    sbExpanded = false;
+    document.getElementById('scoreboard').classList.remove('expanded');
+  }
+  if ((e.key === 'd' || e.key === 'D') && !isMobile()) toggleDevMode();
+});
+
+// Scroll-to-zoom (desktop only)
+const zoomRoot = document.getElementById('zoom-root');
+let scale = 1;
+window.addEventListener('wheel', e => {
+  if (isMobile()) return;
+  e.preventDefault();
+  scale = Math.min(2.5, Math.max(0.3, scale + (e.deltaY > 0 ? -0.08 : 0.08)));
+  zoomRoot.style.transform = `scale(${scale})`;
+}, { passive: false });
+
+// Re-render on resize
+window.addEventListener('resize', () => setTimeout(renderBoard, 150));
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+loadState();
+if (!gs.playerXType || gs.playerXType === 'ai') gs.playerXType = 'ai-hard';
+// Online sessions can't be restored after a page refresh — fall back to human mode
+if (gs.playerXType === 'online') gs.playerXType = 'human';
+if (gs.gameOver) {
+  for (const p of ['O','X']) {
+    const line = checkWin(p);
+    if (line) { winCells = new Set(line.map(([l,r,c]) => `${l},${r},${c}`)); break; }
+  }
+}
+renderBoard();
+maybeScheduleAI();
+
+// ═══════════════════════════════════════════════
+// 3D VIEW ENGINE
+// ═══════════════════════════════════════════════
+function toggle3D() {
+  is3D = !is3D;
+  const overlay = document.getElementById('view3d-overlay');
+  const btn = document.getElementById('view3d-btn');
+  overlay.classList.toggle('active', is3D);
+  btn.classList.toggle('active', is3D);
+  btn.textContent = is3D ? '✕ 2D' : '⬡ 3D';
+  if (is3D) {
+    if (!three) { initThree(); requestAnimationFrame(onThreeResize); }
+    else rebuild3D();
+    animate3D();
+  } else {
+    if (three) { cancelAnimationFrame(three.rafId); three.rafId = null; }
+  }
+}
+
+// ── Emoji → canvas texture (billboard sprite) ──
+function makeEmojiTexture(emoji, isWin) {
+  const sz = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = sz;
+  const ctx = c.getContext('2d');
+  if (isWin) {
+    ctx.fillStyle = 'rgba(255,210,50,0.18)';
+    ctx.beginPath();
+    ctx.arc(sz/2, sz/2, sz/2 - 2, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.font = `${sz * 0.62}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, sz/2, sz/2 + sz*0.04);
+  const tex = new THREE.CanvasTexture(c);
+  return tex;
+}
+
+// ── Draw dashed line between two points ──
+function dashedLine(scene, p1, p2, color, opacity) {
+  const points = [];
+  const segments = 8;
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    points.push(new THREE.Vector3(
+      p1.x + (p2.x - p1.x) * t,
+      p1.y + (p2.y - p1.y) * t,
+      p1.z + (p2.z - p1.z) * t
+    ));
+  }
+  // Draw every other segment (dashed effect)
+  for (let i = 0; i < segments; i += 2) {
+    const geo = new THREE.BufferGeometry().setFromPoints([points[i], points[i+1]]);
+    const mat = new THREE.LineBasicMaterial({ color, opacity, transparent: true });
+    scene.add(new THREE.Line(geo, mat));
+  }
+}
+
+// ── Build ALL cell edges for the entire 4×4×4 cube ──
+// Each cell is a box — we draw all 12 edges of every box.
+// Shared edges are drawn once (deduplication via a Set of edge keys).
+function buildAllCellEdges(pivot) {
+  const N = 4;
+  // Cell size: cube spans -1.5 to +1.5 in all axes → 3 units / 4 = 0.75 per cell
+  const CS = 3.0 / N;   // 0.75
+  const half = 1.5;
+
+  // Edge colours: outer edges brighter, inner dimmer
+  const outerCol  = 0x7799cc;
+  const innerCol  = 0x3a5068;
+  const outerOp   = 0.75;
+  const innerOp   = 0.45;
+
+  // Collect all unique edges as "x0,y0,z0→x1,y1,z1" (always smaller first)
+  // Instead of deduplication, we'll just draw the grid lines directly:
+  // For a 4×4×4 grid we need:
+  //   X-edges: (4+1)*(4+1) * 4 per axis direction... 
+  // Simpler: iterate all grid intersection points and draw edges along each axis
+  
+  // X-direction lines: for each (iy, iz) pair, draw x from 0..N
+  for (let iy = 0; iy <= N; iy++) {
+    for (let iz = 0; iz <= N; iz++) {
+      const y = -half + iy * CS;
+      const z = -half + iz * CS;
+      const isOuterY = iy === 0 || iy === N;
+      const isOuterZ = iz === 0 || iz === N;
+      const isOuter = isOuterY || isOuterZ;
+      for (let ix = 0; ix < N; ix++) {
+        const x0 = -half + ix * CS;
+        const x1 = x0 + CS;
+        dashedLine(pivot,
+          new THREE.Vector3(x0, y, z),
+          new THREE.Vector3(x1, y, z),
+          isOuter ? outerCol : innerCol,
+          isOuter ? outerOp : innerOp);
+      }
+    }
+  }
+
+  // Z-direction lines: for each (ix, iy) pair, draw z from 0..N
+  for (let ix = 0; ix <= N; ix++) {
+    for (let iy = 0; iy <= N; iy++) {
+      const x = -half + ix * CS;
+      const y = -half + iy * CS;
+      const isOuterX = ix === 0 || ix === N;
+      const isOuterY = iy === 0 || iy === N;
+      const isOuter = isOuterX || isOuterY;
+      for (let iz = 0; iz < N; iz++) {
+        const z0 = -half + iz * CS;
+        const z1 = z0 + CS;
+        dashedLine(pivot,
+          new THREE.Vector3(x, y, z0),
+          new THREE.Vector3(x, y, z1),
+          isOuter ? outerCol : innerCol,
+          isOuter ? outerOp : innerOp);
+      }
+    }
+  }
+
+  // Y-direction lines: for each (ix, iz) pair, draw y from 0..N
+  for (let ix = 0; ix <= N; ix++) {
+    for (let iz = 0; iz <= N; iz++) {
+      const x = -half + ix * CS;
+      const z = -half + iz * CS;
+      const isOuterX = ix === 0 || ix === N;
+      const isOuterZ = iz === 0 || iz === N;
+      const isOuter = isOuterX || isOuterZ;
+      for (let iy = 0; iy < N; iy++) {
+        const y0 = -half + iy * CS;
+        const y1 = y0 + CS;
+        dashedLine(pivot,
+          new THREE.Vector3(x, y0, z),
+          new THREE.Vector3(x, y1, z),
+          isOuter ? outerCol : innerCol,
+          isOuter ? outerOp : innerOp);
+      }
+    }
+  }
+}
+
+// ── Build one horizontal layer slice in LOCAL group space ──
+// All geometry is local: y=0 = bottom face, y=CS = top face.
+// group.position.y offsets the whole slice to its world position.
+function buildLayerSlice(grp, l) {
+  const N = 4; const CS = 3.0 / N; const half = 1.5;
+  const outerCol = 0x7799cc; const innerCol = 0x3a5068;
+  const outerOp = 0.75; const innerOp = 0.45;
+
+  // ── Top and bottom horizontal faces ──
+  for (const localY of [0, CS]) {
+    const worldY = (-half + l * CS) + localY;
+    const isOuterY = worldY <= -half + 0.001 || worldY >= half - 0.001;
+    // X-direction lines
+    for (let iz = 0; iz <= N; iz++) {
+      const z = -half + iz * CS;
+      const isOuter = isOuterY || iz === 0 || iz === N;
+      for (let ix = 0; ix < N; ix++) {
+        dashedLine(grp,
+          new THREE.Vector3(-half + ix*CS, localY, z),
+          new THREE.Vector3(-half + (ix+1)*CS, localY, z),
+          isOuter ? outerCol : innerCol, isOuter ? outerOp : innerOp);
+      }
+    }
+    // Z-direction lines
+    for (let ix = 0; ix <= N; ix++) {
+      const x = -half + ix * CS;
+      const isOuter = isOuterY || ix === 0 || ix === N;
+      for (let iz = 0; iz < N; iz++) {
+        dashedLine(grp,
+          new THREE.Vector3(x, localY, -half + iz*CS),
+          new THREE.Vector3(x, localY, -half + (iz+1)*CS),
+          isOuter ? outerCol : innerCol, isOuter ? outerOp : innerOp);
+      }
+    }
+  }
+
+  // ── Vertical (Y-direction) edges — local y from 0 to CS ──
+  // These are the D-edges of each cell within this layer.
+  for (let ix = 0; ix <= N; ix++) {
+    for (let iz = 0; iz <= N; iz++) {
+      const x = -half + ix * CS;
+      const z = -half + iz * CS;
+      const isOuter = ix === 0 || ix === N || iz === 0 || iz === N;
+      dashedLine(grp,
+        new THREE.Vector3(x, 0, z),
+        new THREE.Vector3(x, CS, z),
+        isOuter ? outerCol : innerCol,
+        isOuter ? outerOp : innerOp);
+    }
+  }
+}
+
+// ── Build only the vertical (Y-direction) edges ──
+function buildVerticalEdgesOnly(grp) {
+  const N = 4; const CS = 3.0 / N; const half = 1.5;
+  const outerCol = 0x7799cc; const innerCol = 0x3a5068;
+  const outerOp = 0.75; const innerOp = 0.4;
+
+  for (let ix = 0; ix <= N; ix++) {
+    for (let iz = 0; iz <= N; iz++) {
+      const x = -half + ix * CS;
+      const z = -half + iz * CS;
+      const isOuter = ix === 0 || ix === N || iz === 0 || iz === N;
+      for (let iy = 0; iy < N; iy++) {
+        dashedLine(grp,
+          new THREE.Vector3(x, -half + iy*CS, z),
+          new THREE.Vector3(x, -half + (iy+1)*CS, z),
+          isOuter ? outerCol : innerCol, isOuter ? outerOp : innerOp);
+      }
+    }
+  }
+}
+
+// ── Create emoji sprite at a board position ──
+// l=layer(0-3), r=row(0-3), c=col(0-3)
+function makeSprite(scene, l, r, c, player, isWin) {
+  const emoji = player === 'O' ? gs.emojiPair[0] : gs.emojiPair[1];
+  const tex = makeEmojiTexture(emoji, isWin);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: isWin ? 1 : 0.88 });
+  const sprite = new THREE.Sprite(mat);
+
+  const CS = 3.0 / 4; const half = 1.5;
+  // Position in local group space (group.position.y = -half + l*CS)
+  // so local y=0 is bottom of this layer's cell, CS/2 is centre
+  const x = -half + c * CS + CS / 2;
+  const y = CS / 2;   // local centre within the layer group
+  const z = -half + r * CS + CS / 2;
+
+  sprite.position.set(x, y, z);
+  const sc = CS * 0.82;
+  sprite.scale.set(sc, sc, 1);
+  sprite.userData.baseScale = sc;
+  scene.add(sprite);
+  return sprite;
+}
+
+
+// ── Add a single sprite for a newly placed token (no full rebuild) ──
+function addSprite3D(l, r, c) {
+  if (!three || !three.layerGroups) return;
+  const val = gs.board[l][r][c];
+  if (!val) return;
+  const grp = three.layerGroups[l];
+  if (!grp) return;
+  const sp = makeSprite(grp, l, r, c, val, false);
+  // Brief scale pop-in: start small, animate to full size
+  const target = sp.userData.baseScale;
+  sp.scale.set(0.01, 0.01, 1);
+  const start = performance.now();
+  const dur = 220;
+  function pop(now) {
+    const t = Math.min((now - start) / dur, 1);
+    const ease = 1 - Math.pow(1 - t, 3); // cubic ease-out
+    const s = 0.01 + (target - 0.01) * ease;
+    sp.scale.set(s, s, 1);
+    if (t < 1) requestAnimationFrame(pop);
+  }
+  requestAnimationFrame(pop);
+}
+
+// ─── Main init ───
+function initThree() {
+  const canvas = document.getElementById('three-canvas');
+  const w = canvas.clientWidth || window.innerWidth;
+  const h = canvas.clientHeight || window.innerHeight;
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(w, h);
+  renderer.setClearColor(0x000000, 0);
+
+  const scene = new THREE.Scene();
+
+  const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
+  camera.position.set(5, 4, 6);
+  camera.lookAt(0, 0, 0);
+
+  // ── cube pivot (everything rotates around this) ──
+  const pivot = new THREE.Group();
+  scene.add(pivot);
+
+  // Store state
+  three = {
+    renderer, scene, camera, pivot,
+    rafId: null,
+    rotX: 0.3, rotY: 0.5,       // current euler angles
+    autoRotate: true,
+    winSprites: [],
+    winPulseT: 0,
+    // Drag state
+    dragging: false, lastX: 0, lastY: 0,
+    momentumX: 0, momentumY: 0,
+    sliceSep: 0,
+    labelEls: [],    // DOM label elements
+    // Assembly animation
+    assembling: true, assembleT: 0,
+  };
+
+  buildScene();
+  setupDrag();
+
+  window.addEventListener('resize', onThreeResize);
+  // Ensure correct size after overlay becomes visible
+  requestAnimationFrame(onThreeResize);
+}
+
+function rebuild3D() {
+  // Remove label DOM elements
+  three.labelEls.forEach(el => el.remove());
+  three.labelEls = [];
+  // Reset slice slider
+  three.sliceSep = 0;
+  const sl = document.getElementById('slice-slider');
+  if (sl) { sl.value = 0; sl.style.setProperty('--pct','0%'); }
+  const slLabel = document.getElementById('slice-label');
+  if (slLabel) slLabel.textContent = 'ASSEMBLED';
+  // Clear pivot children
+  while (three.pivot.children.length) three.pivot.remove(three.pivot.children[0]);
+  three.winSprites = [];
+  three.assembling = true;
+  three.assembleT = 0;
+  buildScene();
+}
+
+function buildScene() {
+  const { pivot } = three;
+  three.winSprites = [];
+
+  // Determine win cells
+  const isWinCell = (l, r, c) => winCells.has(`${l},${r},${c}`);
+
+  const N = 4; const CS = 3.0 / N; const half = 1.5;
+  // Spread offsets for assembly animation (applied as group.position.y)
+  const spreadOffsets = [-4.5, -2.0, 2.0, 4.5];
+
+  // Build all 64 cell edges in one pass — lives directly in pivot (no layer groups)
+  // Assembly animation splits these into layer groups for the fly-in
+  three.layerGroups = [];
+  for (let l = 0; l < 4; l++) {
+    const grp = new THREE.Group();
+    // Assembled base position: bottom face of this layer in world space
+    grp.userData.baseY = -half + l * CS;
+    grp.userData.spreadY = spreadOffsets[l];
+    grp.position.y = grp.userData.baseY + spreadOffsets[l]; // start spread from base
+    pivot.add(grp);
+    three.layerGroups.push(grp);
+    buildLayerSlice(grp, l);
+  }
+  // (vertical edges are now part of each layer slice — no separate group needed)
+  three.vertGrp = null;
+
+  // Sprites
+  for (let l = 0; l < 4; l++) {
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        const val = gs.board[l][r][c];
+        if (val) {
+          const win = isWinCell(l, r, c);
+          const sp = makeSprite(three.layerGroups[l], l, r, c, val, win);
+          if (win) three.winSprites.push(sp);
+        }
+      }
+    }
+  }
+
+  // If game is won, find best camera angle
+  if (gs.gameOver && winCells.size > 0) {
+    three.autoRotate = false;
+    positionCameraForWin();
+  } else {
+    three.autoRotate = true;
+  }
+}
+
+// ── Position camera to best view the win line ──
+function positionCameraForWin() {
+  if (winCells.size === 0) return;
+
+  // Find the centroid of win cells
+  let cx = 0, cy = 0, cz = 0;
+  const S = 3.0; const cell = S / 4; const half = S / 2;
+  winCells.forEach(key => {
+    const [l, r, c] = key.split(',').map(Number);
+    cx += -half + c * cell + cell/2;
+    cy += -half + l * cell + cell/2;
+    cz += -half + r * cell + cell/2;
+  });
+  cx /= winCells.size; cy /= winCells.size; cz /= winCells.size;
+
+  // Determine win line direction to find best perpendicular view
+  const cells = [...winCells].map(k => k.split(',').map(Number));
+  const dl = cells[3][0] - cells[0][0];
+  const dr = cells[3][1] - cells[0][1];
+  const dc = cells[3][2] - cells[0][2];
+
+  // Target rotations: tilt to show win nicely
+  // Map direction to a camera angle
+  if (dl !== 0 && dr === 0 && dc === 0) {
+    // Vertical line through layers — view from side
+    three.rotY = Math.PI * 0.25;
+    three.rotX = Math.PI * 0.3;
+  } else if (dl === 0) {
+    // Flat line in a layer — view slightly from above
+    three.rotY = Math.atan2(dc, dr) + Math.PI * 0.1;
+    three.rotX = Math.PI * 0.35;
+  } else {
+    // Diagonal
+    three.rotY = Math.PI * 0.2;
+    three.rotX = Math.PI * 0.25;
+  }
+
+  three.pivot.rotation.x = three.rotX;
+  three.pivot.rotation.y = three.rotY;
+}
+
+// ── Drag to rotate with momentum ──
+function setupDrag() {
+  const canvas = document.getElementById('three-canvas');
+  let velX = 0, velY = 0;       // angular velocity (radians/frame)
+  let prevX = 0, prevY = 0;     // previous pointer position for velocity sampling
+  let velSampleT = 0;           // timestamp of last sample
+
+  function onDown(x, y) {
+    three.dragging = true;
+    three.lastX = x; three.lastY = y;
+    prevX = x; prevY = y;
+    velX = 0; velY = 0;
+    velSampleT = performance.now();
+    three.autoRotate = false;
+  }
+
+  function onMove(x, y) {
+    if (!three.dragging) return;
+    const dx = x - three.lastX, dy = y - three.lastY;
+    three.rotY += dx * 0.008;
+    three.rotX += dy * 0.008;
+    three.rotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, three.rotX));
+    three.lastX = x; three.lastY = y;
+
+    // Sample velocity every ~30ms for momentum
+    const now = performance.now();
+    const dt = now - velSampleT;
+    if (dt > 20) {
+      velX = (x - prevX) / dt * 16; // normalise to ~60fps frame
+      velY = (y - prevY) / dt * 16;
+      prevX = x; prevY = y;
+      velSampleT = now;
+    }
+  }
+
+  function onUp() {
+    three.dragging = false;
+    // Hand off velocity to momentum system
+    three.momentumX = velX * 0.008;
+    three.momentumY = velY * 0.008;
+    // Resume auto-rotate only if game not won (after momentum dies down)
+    if (!gs.gameOver) {
+      setTimeout(() => {
+        if (three && !three.dragging && Math.abs(three.momentumX) < 0.001 && Math.abs(three.momentumY) < 0.001)
+          three.autoRotate = true;
+      }, 2500);
+    }
+  }
+
+  // Only start drag when mousedown is directly on the canvas (not overlay UI)
+  canvas.addEventListener('mousedown', e => {
+    if (e.target !== canvas) return;
+    e.preventDefault();
+    onDown(e.clientX, e.clientY);
+  });
+  // Move/up on window so drag continues if pointer leaves canvas
+  window.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
+  window.addEventListener('mouseup', onUp);
+
+  canvas.addEventListener('touchstart', e => { const t = e.touches[0]; onDown(t.clientX, t.clientY); }, {passive:true});
+  canvas.addEventListener('touchmove', e => { e.preventDefault(); const t = e.touches[0]; onMove(t.clientX, t.clientY); }, {passive:false});
+  canvas.addEventListener('touchend', onUp);
+
+  // Pinch zoom
+  let lastPinchDist = 0;
+  canvas.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      lastPinchDist = Math.sqrt(dx*dx + dy*dy);
+    }
+  }, {passive:true});
+  canvas.addEventListener('touchmove', e => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const delta = lastPinchDist - dist;
+      three.camera.position.z = Math.max(3, Math.min(14, three.camera.position.z + delta * 0.02));
+      lastPinchDist = dist;
+    }
+  }, {passive:false});
+
+  // Scroll zoom (desktop)
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const camDist = three.camera.position.length();
+    const factor = e.deltaY > 0 ? 1.08 : 0.93;
+    const newDist = Math.max(3.5, Math.min(14, camDist * factor));
+    three.camera.position.normalize().multiplyScalar(newDist);
+  }, {passive: false});
+}
+
+// ── Slice slider handler ──
+function onSliceInput(val) {
+  if (!three) return;
+  const pct = val / 100;
+  const slider = document.getElementById('slice-slider');
+  slider.style.setProperty('--pct', val + '%');
+  const label = document.getElementById('slice-label');
+  label.textContent = pct < 0.02 ? 'ASSEMBLED' : pct > 0.98 ? 'EXPLODED' : 'SLICED';
+  three.sliceSep = pct;   // 0 = assembled, 1 = fully separated
+}
+
+function onThreeResize() {
+  if (!three) return;
+  const canvas = document.getElementById('three-canvas');
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (!w || !h) return;
+  three.renderer.setSize(w, h);
+  three.camera.aspect = w / h;
+  three.camera.updateProjectionMatrix();
+}
+
+// ── Animation loop ──
+function animate3D() {
+  if (!is3D || !three) return;
+  three.rafId = requestAnimationFrame(animate3D);
+
+  const dt = 0.016;
+
+  // Assembly animation: layers fly in from spread positions
+  if (three.assembling) {
+    three.assembleT = Math.min(1, three.assembleT + dt * 0.55);
+    const t = easeOutBack(three.assembleT);
+    three.layerGroups.forEach(grp => {
+      grp.position.y = grp.userData.baseY + grp.userData.spreadY * (1 - t);
+    });
+    if (three.assembleT >= 1) {
+      three.assembling = false;
+      three.layerGroups.forEach(grp => { grp.position.y = grp.userData.baseY; });
+    }
+  }
+
+  // Momentum: decay angular velocity and apply
+  if (!three.dragging && (Math.abs(three.momentumX) > 0.0001 || Math.abs(three.momentumY) > 0.0001)) {
+    three.rotY += three.momentumX;
+    three.rotX += three.momentumY;
+    three.rotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, three.rotX));
+    three.momentumX *= 0.92;   // friction
+    three.momentumY *= 0.92;
+  }
+
+  // Auto-rotation (only when momentum is negligible)
+  if (three.autoRotate && !three.dragging && !three.assembling &&
+      Math.abs(three.momentumX) < 0.0005 && Math.abs(three.momentumY) < 0.0005) {
+    three.rotY += gs.gameOver ? 0.006 : 0.004;
+  }
+
+  three.pivot.rotation.x = three.rotX;
+  three.pivot.rotation.y = three.rotY;
+
+  // Slice separation: spread from each layer's assembled baseY
+  if (!three.assembling) {
+    const sep = three.sliceSep || 0;
+    const maxGap = 1.4; // extra gap per layer at full separation
+    const spreadMult = [-1.5, -0.5, 0.5, 1.5];
+    three.layerGroups.forEach((grp, i) => {
+      grp.position.y = grp.userData.baseY + spreadMult[i] * sep * maxGap;
+    });
+    // Show/hide global vertical edges (they look wrong when layers separate)
+    if (three.vertGrp) three.vertGrp.visible = sep < 0.05;
+  }
+
+  // Update CSS layer labels to follow 3D positions
+  updateLayerLabels();
+
+  // Win pulse: scale winning sprites
+  if (three.winSprites.length > 0) {
+    three.winPulseT += dt * 2.5;
+    const pulse = 1 + 0.18 * Math.sin(three.winPulseT);
+    three.winSprites.forEach(sp => {
+      sp.scale.setScalar(sp.userData.baseScale * pulse);
+    });
+  }
+
+  three.renderer.render(three.scene, three.camera);
+}
+
+// ── Project a 3D point to screen coordinates ──
+function project3D(worldPos) {
+  const v = worldPos.clone().project(three.camera);
+  const canvas = document.getElementById('three-canvas');
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  return {
+    x: (v.x * 0.5 + 0.5) * w,
+    y: (-v.y * 0.5 + 0.5) * h,
+    visible: v.z < 1
+  };
+}
+
+// ── Create/update floating layer labels in DOM ──
+function updateLayerLabels() {
+  const overlay = document.getElementById('view3d-overlay');
+  const N = 4; const CS = 3.0 / N; const half = 1.5;
+  const sep = three.sliceSep || 0;
+
+  // Create label elements on first call
+  if (three.labelEls.length === 0) {
+    for (let i = 0; i < N; i++) {
+      const el = document.createElement('div');
+      el.className = 'layer3d-label';
+      el.textContent = 'LAYER ' + (i + 1);
+      overlay.appendChild(el);
+      three.labelEls.push(el);
+    }
+  }
+
+  three.labelEls.forEach((el, i) => {
+    // Use the actual group position + half CS to get centre of layer
+    const grp = three.layerGroups[i];
+    const layerY = grp ? grp.position.y + CS / 2 : (-half + i * CS + CS / 2);
+    const worldPos = new THREE.Vector3(half + 0.3, layerY, 0);
+    // Apply pivot rotation to world pos
+    worldPos.applyEuler(three.pivot.rotation);
+
+    const screen = project3D(worldPos);
+    if (screen.visible) {
+      el.style.display = 'block';
+      el.style.left = screen.x + 'px';
+      el.style.top  = (screen.y - 7) + 'px';  // vertically centre on label
+      // Fade out if layers are assembled (sep < 0.05) unless hovered
+      el.style.opacity = Math.max(0, Math.min(1, sep * 8));
+    } else {
+      el.style.display = 'none';
+    }
+  });
+}
+
+// Smooth easing for assembly
+function easeOutBack(t) {
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
+// 3D sync is handled inline in _afterPlace and startNewGame
+
+// ═══════════════════════════════════════════════════════════════
+// ONLINE MULTIPLAYER ENGINE
+// ═══════════════════════════════════════════════════════════════
+
+// ── Firebase init ──
+const firebaseConfig = {
+  apiKey:            "AIzaSyBb8klKiyiVXeEVfwNtr3gPAV6Tq3Ivnj4",
+  authDomain:        "four-in-a-row-33cb1.firebaseapp.com",
+  projectId:         "four-in-a-row-33cb1",
+  storageBucket:     "four-in-a-row-33cb1.firebasestorage.app",
+  messagingSenderId: "1060250293255",
+  appId:             "1:1060250293255:web:a94bb5b13ac83720f486a2",
+  databaseURL:       "https://four-in-a-row-33cb1-default-rtdb.europe-west1.firebasedatabase.app"
+};
+firebase.initializeApp(firebaseConfig);
+const fbDb = firebase.database();
+
+// ── Auto-cleanup: delete games older than 24h ──
+// Runs once on page load. Each visiting client silently prunes stale games,
+// keeping the DB tidy with no server-side infrastructure needed.
+(async function pruneStaleGames() {
+  // Strategy: try to read each game individually using its own path.
+  // Reading games/$gameId is allowed by security rules even if listing
+  // the entire /games node is not. We track all codes we've ever seen
+  // in localStorage and check+delete each one individually.
+  try {
+    const TTL_MS = 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - TTL_MS;
+
+    // Load the set of known game codes from localStorage
+    let knownCodes;
+    try { knownCodes = new Set(JSON.parse(localStorage.getItem('4iar3d_codes') || '[]')); }
+    catch(_) { knownCodes = new Set(); }
+
+    const deletions = [];
+    const surviving = new Set();
+
+    for (const code of knownCodes) {
+      try {
+        const snap = await fbDb.ref(`games/${code}`).get();
+        if (!snap.exists()) continue; // already gone
+        const d = snap.val();
+        // Delete if: no lastActivity, or lastActivity older than TTL
+        if (!d || d.lastActivity == null || d.lastActivity < cutoff) {
+          deletions.push(fbDb.ref(`games/${code}`).remove());
+        } else {
+          surviving.add(code);
+        }
+      } catch(_) { surviving.add(code); } // keep if we can't read it
+    }
+
+    await Promise.all(deletions);
+
+    // Persist only the surviving codes
+    try { localStorage.setItem('4iar3d_codes', JSON.stringify([...surviving])); } catch(_) {}
+  } catch (_) {
+    // Silent - cleanup is best-effort
+  }
+})();
+
+// ── Track game codes for cleanup ──
+function registerGameCode(code) {
+  try {
+    const codes = new Set(JSON.parse(localStorage.getItem('4iar3d_codes') || '[]'));
+    codes.add(code);
+    localStorage.setItem('4iar3d_codes', JSON.stringify([...codes]));
+  } catch(_) {}
+}
+
+// (onlineState declared at top of script)
+// ── Seed known orphaned codes so they get cleaned up ──
+['BBJT','BDZC','BRGP','FFRN'].forEach(c => registerGameCode(c));
+
+
+// ── Copy game code without selection highlight ──
+function copyGameCode(el, code) {
+  navigator.clipboard.writeText(code).then(() => {
+    const lbl = document.getElementById('copy-label');
+    if (lbl) { lbl.textContent = 'copied!'; lbl.style.color = '#50d890'; }
+    setTimeout(() => {
+      if (lbl) { lbl.textContent = 'tap to copy'; lbl.style.color = ''; }
+    }, 1800);
+  }).catch(() => {});
+}
+
+// ── Code generation: 4 consonants, no ambiguous chars ──
+const CODE_CHARS = 'BCDFGHJKLMNPQRSTVWXZ';
+function genCode() {
+  let code = '';
+  for (let i = 0; i < 4; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  return code;
+}
+
+// ══════════════════════════════
+// MODAL UI
+// ══════════════════════════════
+function showOnlineModal(screen, extra) {
+  const modal  = document.getElementById('online-modal');
+  const panel  = document.getElementById('online-panel-inner');
+  modal.classList.add('active');
+
+  if (screen === 'choose') {
+    panel.innerHTML = `
+      <h2>🌐 Online Play</h2>
+      <p class="sub">Play against a friend anywhere</p>
+      <div class="online-choices">
+        <button class="online-choice-btn" onclick="onlineStartHost()">
+          <span class="choice-icon">🏠</span>
+          <span class="choice-label">Host a game<br><small style="opacity:.5;font-size:9px">Get a code</small></span>
+        </button>
+        <button class="online-choice-btn" onclick="showOnlineModal('join')">
+          <span class="choice-icon">🔑</span>
+          <span class="choice-label">Join a game<br><small style="opacity:.5;font-size:9px">Enter code</small></span>
+        </button>
+      </div>
+      <button class="btn btn-back" onclick="closeOnlineModal()">Cancel</button>
+    `;
+
+  } else if (screen === 'hosting') {
+    panel.innerHTML = `
+      <h2>Your Game Code</h2>
+      <p class="game-code-label">Share this with your friend</p>
+      <div class="game-code-display" style="cursor:pointer;user-select:none"
+           onclick="copyGameCode(this,'${extra}')">${extra}</div>
+      <div class="game-code-label" id="copy-label" style="margin-top:-8px">tap to copy</div>
+      <div class="online-waiting">
+        <div class="online-waiting-msg">Waiting for opponent<span class="waiting-dots">…</span></div>
+      </div>
+      <button class="btn btn-back" onclick="cancelHosting()">Cancel</button>
+    `;
+
+  } else if (screen === 'join') {
+    panel.innerHTML = `
+      <h2>Join a Game</h2>
+      <p class="sub">Enter your friend's 4-letter code</p>
+      <div class="code-input-row">
+        <input id="join-code-input" class="code-input" maxlength="4"
+          placeholder="CODE" autocomplete="off" spellcheck="false"
+          oninput="this.value=this.value.toUpperCase().replace(/[^BCDFGHJKLMNPQRSTVWXZ]/g,'')"
+          onkeydown="if(event.key==='Enter') onlineJoin()">
+      </div>
+      <div id="join-error" style="font-size:11px;color:#d85050;min-height:16px;text-align:center;font-weight:700;"></div>
+      <div style="display:flex;gap:8px;width:100%;">
+        <button class="btn btn-back" style="flex:1" onclick="showOnlineModal('choose')">Back</button>
+        <button class="btn" style="flex:2" onclick="onlineJoin()">Join Game</button>
+      </div>
+    `;
+    setTimeout(() => document.getElementById('join-code-input')?.focus(), 80);
+
+  } else if (screen === 'connected') {
+    modal.classList.remove('active');
+  }
+}
+
+function closeOnlineModal() {
+  document.getElementById('online-modal').classList.remove('active');
+  // If we opened the modal but didn't start, revert mode
+  if (gs.playerXType !== 'online') renderScoreboard();
+}
+
+// ══════════════════════════════
+// HOST FLOW
+// ══════════════════════════════
+async function onlineStartHost() {
+  // Generate unique code (retry if already exists)
+  let code, exists = true, attempts = 0;
+  while (exists && attempts < 10) {
+    code = genCode();
+    const snap = await fbDb.ref(`games/${code}`).get();
+    exists = snap.exists() && snap.val().guestConnected;
+    attempts++;
+  }
+
+  onlineState.gameCode = code;
+  onlineState.myRole   = 'O';
+  registerGameCode(code);
+  onlineState.myName   = gs.names.O;
+
+  // Build initial game state in Firebase
+  const fresh = defaultState();
+  fresh.playerXType = 'online';
+  fresh.names.O     = gs.names.O;  // keep host's name
+
+  await fbDb.ref(`games/${code}`).set({
+    board:             fresh.board,
+    turn:              fresh.turn,
+    gameOver:          false,
+    scores:            {O: 0, X: 0},
+    names:             fresh.names,
+    emojiPair:         fresh.emojiPair,
+    hostConnected:     true,
+    guestConnected:    false,
+    lastActivity:      firebase.database.ServerValue.TIMESTAMP,
+    newGameRequested:  false,
+  });
+
+  gs.playerXType = 'online';
+  saveState();
+  showOnlineModal('hosting', code);
+  attachOnlineListener(code);
+  setupPresence(code, 'host');
+}
+
+// ══════════════════════════════
+// GUEST FLOW
+// ══════════════════════════════
+async function onlineJoin() {
+  const input = document.getElementById('join-code-input');
+  const errEl = document.getElementById('join-error');
+  const code  = (input?.value || '').trim().toUpperCase();
+
+  if (code.length !== 4) { errEl.textContent = 'Enter a 4-letter code.'; return; }
+
+  errEl.textContent = '';
+  input.disabled = true;
+
+  const snap = await fbDb.ref(`games/${code}`).get();
+  if (!snap.exists()) {
+    errEl.textContent = 'Game not found. Check the code.';
+    input.disabled = false; return;
+  }
+  const data = snap.val();
+  if (data.guestConnected) {
+    errEl.textContent = 'That game already has two players.';
+    input.disabled = false; return;
+  }
+  if (data.gameOver && !data.newGameRequested) {
+    errEl.textContent = 'That game has ended.';
+    input.disabled = false; return;
+  }
+
+  onlineState.gameCode = code;
+  onlineState.myRole   = 'X';
+  registerGameCode(code);
+  onlineState.myName   = gs.names.X;
+
+  // Write guest name and mark connected
+  await fbDb.ref(`games/${code}`).update({
+    guestConnected: true,
+    'names/X':      gs.names.X,
+    lastActivity:   firebase.database.ServerValue.TIMESTAMP,
+  });
+
+  gs.playerXType = 'online';
+  saveState();
+  attachOnlineListener(code);
+  setupPresence(code, 'guest');
+}
+
+// ══════════════════════════════
+// FIREBASE LISTENER
+// ══════════════════════════════
+// ── Firebase returns nested arrays as objects — convert back ──
+function fbToBoard(raw) {
+  // raw is either already an array or an object like {0:{0:{0:null,...}}}
+  const board = [];
+  for (let l = 0; l < 4; l++) {
+    const layer = [];
+    for (let r = 0; r < 4; r++) {
+      const row = [];
+      for (let c = 0; c < 4; c++) {
+        const v = raw && raw[l] && raw[l][r] ? (raw[l][r][c] ?? null) : null;
+        row.push(v);
+      }
+      layer.push(row);
+    }
+    board.push(layer);
+  }
+  return board;
+}
+
+function fbToArray(raw) {
+  // Converts a Firebase object-array like {0:'🍩',1:'🧁'} to ['🍩','🧁']
+  if (Array.isArray(raw)) return raw;
+  if (!raw) return [];
+  return Object.keys(raw).sort((a,b) => +a - +b).map(k => raw[k]);
+}
+
+function attachOnlineListener(code) {
+  if (onlineState.unsubscribe) onlineState.unsubscribe();
+
+  const ref = fbDb.ref(`games/${code}`);
+  onlineState.gameRef = ref;
+
+  const handler = ref.on('value', snap => {
+    if (!snap.exists()) return;
+    const data = snap.val();
+
+    // ── Sanitise Firebase data (arrays come back as objects) ──
+    const safeBoard    = fbToBoard(data.board);
+    const safeEmoji    = fbToArray(data.emojiPair);
+    const safeTurn     = data.turn    || 'O';
+    const safeGameOver = !!data.gameOver;
+    const safeScores   = data.scores  || {O:0, X:0};
+    const safeNames    = data.names   || {O:'Player O', X:'Player X'};
+
+    // Guard: must have valid board and emoji before rendering
+    if (!safeBoard || !safeEmoji || safeEmoji.length < 2) return;
+
+    // ── Opponent abandoned the game ──
+    if (data.abandoned && data.abandonedBy && data.abandonedBy !== onlineState.myRole) {
+      leaveOnlineGame();
+      gs.playerXType = 'human'; saveState();
+      // Show notification in the disconnect banner
+      const discBanner = document.getElementById('disconnect-banner');
+      discBanner.querySelector('.disc-icon').textContent = '🚪';
+      discBanner.querySelector('.disc-title').textContent = 'Opponent left the game';
+      discBanner.querySelector('.disc-sub').textContent = 'The game has ended.';
+      discBanner.querySelector('button').textContent = 'OK';
+      discBanner.querySelector('button').onclick = () => {
+        discBanner.classList.remove('active');
+        discBanner.querySelector('.disc-icon').textContent = '🔌';
+        discBanner.querySelector('.disc-title').textContent = 'Opponent disconnected';
+        discBanner.querySelector('.disc-sub').textContent = 'Waiting for them to reconnect…';
+        discBanner.querySelector('button').textContent = 'Abandon game';
+        discBanner.querySelector('button').onclick = abandonOnlineGame;
+        renderBoard();
+      };
+      discBanner.classList.add('active');
+      return;
+    }
+
+    // ── Dismiss modal immediately (before any layout work) ──
+    document.getElementById('online-modal').classList.remove('active');
+
+    // ── Update opponent connection status ──
+    const wasConnected = onlineState.opponentConnected;
+    onlineState.opponentConnected = onlineState.myRole === 'O'
+      ? !!data.guestConnected
+      : !!data.hostConnected;
+
+    // Host: update waiting modal or keep it open if guest hasn't joined yet
+    if (onlineState.myRole === 'O' && !data.guestConnected) {
+      document.getElementById('online-modal').classList.add('active');
+      showOnlineModal('hosting', onlineState.gameCode);
+    }
+
+    // ── Detect last move from board diff (find newly placed cell) ──
+    const prevGameOver = gs.gameOver;
+    let detectedMove = null;
+    outer: for (let li=0; li<4; li++)
+      for (let ri=0; ri<4; ri++)
+        for (let ci=0; ci<4; ci++)
+          if (!gs.board[li][ri][ci] && safeBoard[li][ri][ci]) { detectedMove={l:li,r:ri,c:ci}; break outer; }
+    if (detectedMove) {
+      lastMove = detectedMove;
+    } else if (!prevGameOver) {
+      // No new move found — could be a new game reset; clear if board is empty
+      const boardEmpty = safeBoard.every(layer => layer.every(row => row.every(c => !c)));
+      if (boardEmpty) lastMove = null;
+    }
+    gs.board       = safeBoard;
+    gs.turn        = safeTurn;
+    gs.gameOver    = safeGameOver;
+    gs.scores      = safeScores;
+    gs.names       = safeNames;
+    gs.emojiPair   = safeEmoji;
+    gs.playerXType = 'online';
+
+    // ── Disconnect banner: only show once both have connected at least once ──
+    const discBanner = document.getElementById('disconnect-banner');
+    const bothEverConnected = data.hostConnected !== undefined && data.guestConnected !== undefined;
+    if (bothEverConnected && !gs.gameOver && !onlineState.opponentConnected) {
+      discBanner.classList.add('active');
+    } else {
+      discBanner.classList.remove('active');
+    }
+
+    // ── Win cells ──
+    winCells = new Set();
+    if (gs.gameOver) {
+      for (const p of ['O','X']) {
+        const line = checkWin(p);
+        if (line) { winCells = new Set(line.map(([l,r,c]) => `${l},${r},${c}`)); break; }
+      }
+    }
+
+    requestAnimationFrame(() => {
+      renderBoard();
+      if (is3D && three) {
+        if (detectedMove && !gs.gameOver) {
+          // Just pop in the new sprite — don't reanimate the whole cube
+          setTimeout(() => addSprite3D(detectedMove.l, detectedMove.r, detectedMove.c), 30);
+        } else {
+          // Game over or new game — full rebuild needed
+          setTimeout(rebuild3D, 60);
+        }
+      }
+    });
+
+    // ── Win/draw banner ──
+    if (gs.gameOver && !prevGameOver) {
+      const winner = checkWinPlayer();
+      setTimeout(() => {
+        if (winner) showBanner('win', winner);
+        else showBanner('draw', null);
+      }, 400);
+    }
+
+    // ── Host new-game reset: once guest sees newGameRequested, host clears flag ──
+    if (data.newGameRequested && onlineState.myRole === 'O') {
+      setTimeout(() => {
+        onlineState.gameRef && onlineState.gameRef.update({ newGameRequested: false });
+      }, 300);
+    }
+  });
+
+  onlineState.unsubscribe = () => ref.off('value', handler);
+}
+
+// ══════════════════════════════
+// PRESENCE (connection tracking)
+// ══════════════════════════════
+function setupPresence(code, role) {
+  const fieldName = role === 'host' ? 'hostConnected' : 'guestConnected';
+  const gameRef   = fbDb.ref(`games/${code}`);
+
+  // When this client disconnects, mark as offline
+  gameRef.child(fieldName).onDisconnect().set(false);
+
+  // Also clean up whole game after 30min inactivity (only host does this)
+  if (role === 'host') {
+    fbDb.ref(`games/${code}`).onDisconnect().remove();
+  }
+}
+
+// ══════════════════════════════
+// MOVE WRITING
+// ══════════════════════════════
+function onlineWriteMove(l, r, c) {
+  if (!onlineState.gameRef) return;
+
+  // Deep-copy board as a clean nested array (safe for Firebase)
+  const newBoard = Array.from({length:4}, (_,li) =>
+    Array.from({length:4}, (_,ri) =>
+      Array.from({length:4}, (_,ci) => gs.board[li][ri][ci])
+    )
+  );
+  const mover = gs.turn;
+  newBoard[l][r][c] = mover;
+  const nextTurn = mover === 'O' ? 'X' : 'O';
+
+  // Snapshot gs, swap in new board, check outcome, restore
+  const origBoard = gs.board;
+  gs.board = newBoard;
+  const winLine  = checkWin(mover);
+  const draw     = !winLine && checkDraw();
+  const inevit   = !winLine && !draw && isInevitableDraw();
+  const gameOver = !!(winLine || draw || inevit);
+  const newScores = {...gs.scores};
+  if (winLine) newScores[mover]++;
+  gs.board = origBoard;   // restore — listener will apply the authoritative state
+
+  onlineState.gameRef.update({
+    board:        newBoard,
+    turn:         gameOver ? mover : nextTurn,
+    gameOver:     gameOver,
+    scores:       newScores,
+    lastActivity: firebase.database.ServerValue.TIMESTAMP,
+  });
+}
+
+// ══════════════════════════════
+// HOST NEW GAME
+// ══════════════════════════════
+function onlineHostNewGame(keepScores) {
+  if (!onlineState.gameRef) return;
+  const scores = keepScores ? {...gs.scores} : {O:0, X:0};
+  const fresh  = defaultState();
+  onlineState.gameRef.update({
+    board:            fresh.board,
+    turn:             'O',
+    gameOver:         false,
+    scores:           scores,
+    emojiPair:        fresh.emojiPair,
+    newGameRequested: true,
+    lastActivity:     firebase.database.ServerValue.TIMESTAMP,
+  });
+}
+
+// ══════════════════════════════
+// HELPERS
+// ══════════════════════════════
+function checkWinPlayer() {
+  for (const p of ['O','X']) { if (checkWin(p)) return p; }
+  return null;
+}
+
+function cancelHosting() {
+  if (onlineState.gameCode) fbDb.ref(`games/${onlineState.gameCode}`).remove();
+  leaveOnlineGame();
+  showOnlineModal('choose');
+}
+
+function leaveOnlineGame() {
+  if (onlineState.unsubscribe) { onlineState.unsubscribe(); onlineState.unsubscribe = null; }
+  if (onlineState.gameRef) {
+    const fieldName = onlineState.myRole === 'O' ? 'hostConnected' : 'guestConnected';
+    onlineState.gameRef.update({ [fieldName]: false });
+    onlineState.gameRef = null;
+  }
+  onlineState = { gameCode:null, myRole:null, myName:null, gameRef:null, unsubscribe:null, opponentConnected:false };
+  document.getElementById('disconnect-banner').classList.remove('active');
+  document.getElementById('online-modal').classList.remove('active');
+}
+
+function abandonOnlineGame() {
+  leaveOnlineGame();
+  gs.playerXType = 'human';
+  saveState(); renderBoard();
+}
+
+
+</script>
+</body>
+</html>
