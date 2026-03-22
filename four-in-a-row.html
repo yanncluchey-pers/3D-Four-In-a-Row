@@ -880,7 +880,7 @@ function renderScoreboard() {
   // New Game button: guests in online mode can't start a new game
   const ngBtn = document.getElementById('new-game-btn');
   if (ngBtn) {
-    const isOnlineGuest = gs.playerXType === 'online' && onlineState.myRole === 'X';
+    const isOnlineGuest = gs.playerXType === 'online' && onlineState.myRole === 'X' && !gs.gameOver;
     if (isOnlineGuest) {
       ngBtn.style.visibility = 'hidden';
       ngBtn.style.pointerEvents = 'none';
