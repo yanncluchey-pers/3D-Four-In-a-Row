@@ -842,8 +842,7 @@ function renderScoreboard() {
     } else {
       ngBtn.style.visibility = '';
       ngBtn.style.pointerEvents = '';
-      // Don't clobber confirm state text
-      if (!newGameConfirm) ngBtn.textContent = 'New Game';
+      ngBtn.textContent = 'New Game';
     }
   }
   updateDevPanel();
