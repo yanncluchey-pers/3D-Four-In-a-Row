@@ -1688,7 +1688,6 @@ function initThree() {
   three = {
     renderer, scene, camera, pivot,
     rafId: null,
-    rotX: 0.3, rotY: 0.5,       // current euler angles
     autoRotate: true,
     winSprites: [],
     winPulseT: 0,
@@ -1708,6 +1707,9 @@ function initThree() {
     mouse: new THREE.Vector2(),
     clickStart: null,
   };
+
+  // Set initial rotation via quaternion
+  pivot.quaternion.setFromEuler(new THREE.Euler(0.3, 0.5, 0, 'YXZ'));
 
   buildScene();
   setupDrag();
@@ -1813,22 +1815,20 @@ function positionCameraForWin() {
 
   // Target rotations: tilt to show win nicely
   // Map direction to a camera angle
+  let targetRotX, targetRotY;
   if (dl !== 0 && dr === 0 && dc === 0) {
-    // Vertical line through layers — view from side
-    three.rotY = Math.PI * 0.25;
-    three.rotX = Math.PI * 0.3;
+    targetRotY = Math.PI * 0.25;
+    targetRotX = Math.PI * 0.3;
   } else if (dl === 0) {
-    // Flat line in a layer — view slightly from above
-    three.rotY = Math.atan2(dc, dr) + Math.PI * 0.1;
-    three.rotX = Math.PI * 0.35;
+    targetRotY = Math.atan2(dc, dr) + Math.PI * 0.1;
+    targetRotX = Math.PI * 0.35;
   } else {
-    // Diagonal
-    three.rotY = Math.PI * 0.2;
-    three.rotX = Math.PI * 0.25;
+    targetRotY = Math.PI * 0.2;
+    targetRotX = Math.PI * 0.25;
   }
 
-  three.pivot.rotation.x = three.rotX;
-  three.pivot.rotation.y = three.rotY;
+  const euler = new THREE.Euler(targetRotX, targetRotY, 0, 'YXZ');
+  three.pivot.quaternion.setFromEuler(euler);
 }
 
 // ── Drag to rotate with momentum ──
@@ -1852,9 +1852,11 @@ function setupDrag() {
   function onMove(x, y) {
     if (!three.dragging) return;
     const dx = x - three.lastX, dy = y - three.lastY;
-    three.rotY += dx * 0.008;
-    three.rotX += dy * 0.008;
-    three.rotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, three.rotX));
+    // Apply rotation relative to camera view using quaternions
+    const qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dx * 0.008);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(three.pivot.quaternion);
+    const qX = new THREE.Quaternion().setFromAxisAngle(right, dy * 0.008);
+    three.pivot.quaternion.premultiply(qY).premultiply(qX);
     three.lastX = x; three.lastY = y;
 
     // Sample velocity every ~30ms for momentum
@@ -2083,23 +2085,23 @@ function animate3D() {
     }
   }
 
-  // Momentum: decay angular velocity and apply
+  // Momentum: decay angular velocity and apply via quaternions
   if (!three.dragging && (Math.abs(three.momentumX) > 0.0001 || Math.abs(three.momentumY) > 0.0001)) {
-    three.rotY += three.momentumX;
-    three.rotX += three.momentumY;
-    three.rotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, three.rotX));
-    three.momentumX *= 0.92;   // friction
+    const qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), three.momentumX);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(three.pivot.quaternion);
+    const qX = new THREE.Quaternion().setFromAxisAngle(right, three.momentumY);
+    three.pivot.quaternion.premultiply(qY).premultiply(qX);
+    three.momentumX *= 0.92;
     three.momentumY *= 0.92;
   }
 
   // Auto-rotation (only when momentum is negligible)
   if (three.autoRotate && !three.dragging && !three.assembling &&
       Math.abs(three.momentumX) < 0.0005 && Math.abs(three.momentumY) < 0.0005) {
-    three.rotY += gs.gameOver ? 0.006 : 0.004;
+    const speed = gs.gameOver ? 0.006 : 0.004;
+    const qSpin = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), speed);
+    three.pivot.quaternion.premultiply(qSpin);
   }
-
-  three.pivot.rotation.x = three.rotX;
-  three.pivot.rotation.y = three.rotY;
 
   // Slice separation: spread from each layer's assembled baseY
   if (!three.assembling) {
