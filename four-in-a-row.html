@@ -367,7 +367,7 @@ body.dev-active #layer-selector { bottom: 44px; }
 
 /* ── 3D layer selector ── */
 #layer-selector {
-  position: fixed; bottom: 14px; left: 18px;
+  position: fixed; bottom: 14px; right: 18px;
   display: none; align-items: center; gap: 4px;
 }
 #view3d-container.active #layer-selector { display: flex; }
@@ -1658,8 +1658,9 @@ function addSprite3D(l, r, c) {
 // ─── Main init ───
 function get3DSize() {
   const topBar = document.querySelector('.top-bar');
+  const topBarBottom = topBar ? topBar.getBoundingClientRect().bottom : 0;
   const w = window.innerWidth;
-  const h = window.innerHeight - (topBar ? topBar.offsetHeight : 0);
+  const h = window.innerHeight - topBarBottom;
   return { w, h };
 }
 
