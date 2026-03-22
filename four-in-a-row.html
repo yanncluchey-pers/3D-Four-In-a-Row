@@ -2130,8 +2130,8 @@ function showOnlineModal(screen, extra) {
 
 function closeOnlineModal() {
   document.getElementById('online-modal').classList.remove('active');
-  // If we opened the modal but didn't start, revert mode
-  if (gs.playerXType !== 'online') renderScoreboard();
+  // Return to new game modal if we came from there
+  showNewGameModal();
 }
 
 // ══════════════════════════════
