@@ -784,7 +784,18 @@ function renderScoreboard() {
   `;
 
   const ti = document.getElementById('turn-indicator');
-  if (!gs.gameOver) {
+  if (gs.gameOver) {
+    // Restore win/draw label
+    let winner = null;
+    for (const p of ['O','X']) { if (checkWin(p)) { winner = p; break; } }
+    if (winner) {
+      ti.textContent = `${emojiFor(winner)} ${gs.names[winner]} wins!`;
+      ti.className = `turn-indicator active-${winner.toLowerCase()}`;
+    } else {
+      ti.textContent = "It's a draw!";
+      ti.className = 'turn-indicator';
+    }
+  } else {
     if (xThinking) {
       ti.innerHTML = `${emojiFor('X')} <span class="thinking-dots">thinking…</span>`;
     } else {
