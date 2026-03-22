@@ -310,7 +310,10 @@ body {
   .turn-indicator { display: none; }
   .scoreboard-row { padding: 5px 10px 7px; gap: 6px; }
   .btn { padding: 6px 8px; font-size: 10px; }
-  #dev-panel, .dev-hint, .zoom-hint { display: none !important; }
+}
+/* Hide dev tools on touch devices */
+@media (pointer: coarse) {
+  #dev-panel, .dev-hint { display: none !important; }
 }
 
 
@@ -616,7 +619,7 @@ let onlineState = {
 };
 
 // ── Mobile detection ──
-const isMobile = () => window.innerWidth < 960 || window.innerHeight < 450;
+const isMobile = () => 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
 // ═══════════════════════════════════════════════
 // EMOJI PAIRS & NAMES
