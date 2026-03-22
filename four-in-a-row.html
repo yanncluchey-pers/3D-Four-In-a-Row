@@ -824,14 +824,16 @@ function renderScoreboard() {
       <div class="player-slot ${isOActive?'active-o':''} ${winner==='O'?'winner-o':''} ${!gs.gameOver&&!isOActive?'inactive':''}" id="slot-o">
         <div class="player-avatar">${gs.emojiPair[0]}</div>
         <div class="player-info">
-          <div class="player-name-wrap">${nameO}${badgeOnO ? onlineBadgeHtml : ''}</div>
+          <div class="player-name-wrap">${nameO}</div>
+          ${badgeOnO ? onlineBadgeHtml : ''}
           <div class="player-score">${gs.scores.O}</div>
         </div>
       </div>
       <div class="vs-divider">VS</div>
       <div class="player-slot slot-right ${isXActive?'active-x':''} ${winner==='X'?'winner-x':''} ${!gs.gameOver&&!isXActive?'inactive':''}" id="slot-x">
         <div class="player-info">
-          <div class="player-name-wrap">${badgeOnX ? onlineBadgeHtml : (xIsAI ? '<span class="ai-badge">AI</span>' : '')}${nameX}</div>
+          <div class="player-name-wrap">${nameX}</div>
+          ${badgeOnX ? onlineBadgeHtml : (xIsAI ? '<span class="ai-badge">AI</span>' : '')}
           <div class="player-score">${gs.scores.X}</div>
         </div>
         <div class="player-avatar">${gs.emojiPair[1]}</div>
@@ -1406,8 +1408,6 @@ function setViewMode(mode) {
     if (!three) initThree();
     else rebuild3D();
     animate3D();
-    // Resize after top bar animation completes (0.35s)
-    setTimeout(onThreeResize, 400);
   } else {
     container.classList.remove('active');
     if (three) { cancelAnimationFrame(three.rafId); three.rafId = null; }
@@ -1662,13 +1662,12 @@ function addSprite3D(l, r, c) {
 
 // ─── Main init ───
 function get3DSize() {
-  const container = document.getElementById('view3d-container');
-  if (container && container.clientWidth && container.clientHeight) {
-    return { w: container.clientWidth, h: container.clientHeight };
-  }
+  // Calculate final 3D canvas size: full viewport minus the top bar's
+  // natural height (offsetHeight includes padding but not margin).
+  // This is independent of any ongoing margin animation.
   const topBar = document.querySelector('.top-bar');
-  const topH = topBar ? topBar.getBoundingClientRect().bottom : 0;
-  return { w: window.innerWidth, h: window.innerHeight - topH };
+  const topBarH = topBar ? topBar.offsetHeight : 0;
+  return { w: window.innerWidth, h: window.innerHeight - topBarH };
 }
 
 function initThree() {
