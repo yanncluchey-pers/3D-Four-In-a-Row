@@ -71,6 +71,8 @@ body {
   padding: 8px 8px;
   margin-bottom: var(--gap);
   flex-shrink: 0;
+  transition: margin-top 0.35s ease;
+  z-index: 1;
 }
 
 /* ── Turn indicator ── */
@@ -1289,7 +1291,18 @@ function fitGrid() {
     const fitH = window.innerHeight / zoomRoot.scrollHeight;
     const fit = Math.min(1, fitW, fitH);
     zoomRoot.style.transform = `scale(${fit})`;
+    positionTopBar();
   });
+}
+function positionTopBar() {
+  const topBar = document.querySelector('.top-bar');
+  if (is3D) { topBar.style.marginTop = '0px'; return; }
+  // Place top bar just above the centered grid
+  const scaledH = zoomRoot.scrollHeight * parseFloat((zoomRoot.style.transform.match(/scale\(([^)]+)\)/) || [,'1'])[1]);
+  const gridTop = (window.innerHeight - scaledH) / 2;
+  const topBarH = topBar.offsetHeight + parseInt(getComputedStyle(topBar).marginBottom);
+  const margin = Math.max(0, gridTop - topBarH);
+  topBar.style.marginTop = margin + 'px';
 }
 fitGrid();
 
@@ -1335,6 +1348,7 @@ function setViewMode(mode) {
     zoomRoot.style.opacity = '0';
     setTimeout(() => { zoomRoot.style.display = 'none'; }, 300);
     container.classList.add('active');
+    positionTopBar();
     if (!three) initThree();
     else rebuild3D();
     animate3D();
