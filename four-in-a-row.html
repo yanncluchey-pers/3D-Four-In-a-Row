@@ -2326,6 +2326,7 @@ if (gs.playerXType === 'online') {
     onlineState.myRole = session.role;
     onlineState.myName = gs.names[session.role];
     onlineState.opponentConnected = true; // assume connected until listener says otherwise
+    onlineState._guestEverConnected = true; // game was in progress, so guest must have joined
     attachOnlineListener(session.code);
     setupPresence(session.code, session.role === 'O' ? 'host' : 'guest');
     renderBoard(); // re-render with unlocked grid
@@ -2660,8 +2661,8 @@ function attachOnlineListener(code) {
 
     // Host: show waiting modal if guest disconnects (with delay for rapid reconnects)
     if (onlineState.myRole === 'O' && !data.guestConnected) {
-      if (wasConnected) {
-        // Guest was connected but just disconnected — delay to allow rapid reconnect
+      if (onlineState._guestEverConnected) {
+        // Guest was connected before — delay to allow rapid reconnect
         if (!onlineState._reconnectTimer) {
           onlineState._reconnectTimer = setTimeout(() => {
             onlineState._reconnectTimer = null;
@@ -2669,16 +2670,19 @@ function attachOnlineListener(code) {
               document.getElementById('online-modal').classList.add('active');
               showOnlineModal('hosting', onlineState.gameCode);
             }
-          }, 300);
+          }, 500);
         }
       } else {
         // Guest never joined yet
         document.getElementById('online-modal').classList.add('active');
         showOnlineModal('hosting', onlineState.gameCode);
       }
-    } else if (onlineState._reconnectTimer) {
-      clearTimeout(onlineState._reconnectTimer);
-      onlineState._reconnectTimer = null;
+    } else {
+      if (onlineState._reconnectTimer) {
+        clearTimeout(onlineState._reconnectTimer);
+        onlineState._reconnectTimer = null;
+      }
+      if (data.guestConnected) onlineState._guestEverConnected = true;
     }
 
     // ── Detect last move from board diff (find newly placed cell) ──
@@ -2705,11 +2709,9 @@ function attachOnlineListener(code) {
     saveState();
 
     // ── Disconnect banner: only show once both have connected at least once ──
+    // (delay handled by the reconnect timer above — banner shows after timer fires)
     const discBanner = document.getElementById('disconnect-banner');
-    const bothEverConnected = data.hostConnected !== undefined && data.guestConnected !== undefined;
-    if (bothEverConnected && !gs.gameOver && !onlineState.opponentConnected) {
-      discBanner.classList.add('active');
-    } else {
+    if (onlineState.opponentConnected || gs.gameOver) {
       discBanner.classList.remove('active');
     }
 
