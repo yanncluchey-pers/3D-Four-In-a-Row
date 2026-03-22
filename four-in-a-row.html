@@ -825,16 +825,16 @@ function renderScoreboard() {
         <div class="player-avatar">${gs.emojiPair[0]}</div>
         <div class="player-info">
           <div class="player-name-wrap">${nameO}</div>
-          ${badgeOnO ? onlineBadgeHtml : ''}
           <div class="player-score">${gs.scores.O}</div>
+          ${badgeOnO ? onlineBadgeHtml : ''}
         </div>
       </div>
       <div class="vs-divider">VS</div>
       <div class="player-slot slot-right ${isXActive?'active-x':''} ${winner==='X'?'winner-x':''} ${!gs.gameOver&&!isXActive?'inactive':''}" id="slot-x">
         <div class="player-info">
           <div class="player-name-wrap">${nameX}</div>
-          ${badgeOnX ? onlineBadgeHtml : (xIsAI ? '<span class="ai-badge">AI</span>' : '')}
           <div class="player-score">${gs.scores.X}</div>
+          ${badgeOnX ? onlineBadgeHtml : (xIsAI ? '<span class="ai-badge">AI</span>' : '')}
         </div>
         <div class="player-avatar">${gs.emojiPair[1]}</div>
       </div>
@@ -1366,18 +1366,9 @@ window.addEventListener('resize', () => {
 // ═══════════════════════════════════════════════
 loadState();
 if (!gs.playerXType || gs.playerXType === 'ai') gs.playerXType = 'ai-hard';
-// Attempt to restore online session after page refresh
-if (gs.playerXType === 'online') {
-  const session = loadOnlineSession();
-  if (session && session.code && session.role) {
-    onlineState.gameCode = session.code;
-    onlineState.myRole = session.role;
-    onlineState.myName = gs.names[session.role];
-    attachOnlineListener(session.code);
-    setupPresence(session.code, session.role === 'O' ? 'host' : 'guest');
-  } else {
-    gs.playerXType = 'human';
-  }
+// Online sessions restored after Firebase init (see below)
+if (gs.playerXType === 'online' && !loadOnlineSession()) {
+  gs.playerXType = 'human';
 }
 if (gs.gameOver) {
   for (const p of ['O','X']) {
@@ -2325,6 +2316,18 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const fbDb = firebase.database();
+
+// ── Restore online session after page refresh ──
+if (gs.playerXType === 'online') {
+  const session = loadOnlineSession();
+  if (session && session.code && session.role) {
+    onlineState.gameCode = session.code;
+    onlineState.myRole = session.role;
+    onlineState.myName = gs.names[session.role];
+    attachOnlineListener(session.code);
+    setupPresence(session.code, session.role === 'O' ? 'host' : 'guest');
+  }
+}
 
 // ── Auto-cleanup: delete games older than 24h ──
 // Runs once on page load. Each visiting client silently prunes stale games,
