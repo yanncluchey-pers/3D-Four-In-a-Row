@@ -34,7 +34,7 @@ html, body { width: 100%; } html { overflow-x: hidden; }
 body {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   height: 100vh;
   overflow: hidden;
@@ -66,6 +66,7 @@ body {
   padding: 8px 8px;
   margin-bottom: var(--gap);
   flex-shrink: 0;
+  transition: margin-top 0.35s ease;
 }
 
 /* ── Turn indicator ── */
@@ -86,7 +87,7 @@ body {
   display: flex; flex-direction: column; align-items: stretch;
   background: #23293a; border-radius: var(--card-radius);
   box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
-  overflow: hidden; position: relative; flex-shrink: 0; max-width: 452px;
+  overflow: hidden; position: relative; flex-shrink: 0; width: 452px;
 }
 .scoreboard-row {
   display: flex; align-items: center; gap: 16px; padding: 10px 18px 12px;
@@ -1270,9 +1271,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeNewGameModal();
   if ((e.key === 'd' || e.key === 'D') && !isMobile()) toggleDevMode();
   if (e.key === 'm' || e.key === 'M') {
-    const gr = document.getElementById('grids-row');
-    gr.classList.toggle('vertical');
-    document.body.style.justifyContent = gr.classList.contains('vertical') ? 'flex-start' : 'center';
+    document.getElementById('grids-row').classList.toggle('vertical');
     fitGrid();
   }
 });
@@ -1280,9 +1279,11 @@ document.addEventListener('keydown', e => {
 // Auto-fit: scale #zoom-root to fit viewport
 const zoomRoot = document.getElementById('zoom-root');
 function fitGrid() {
+  const topBar = document.querySelector('.top-bar');
+  // Reset margin to measure natural top bar height
+  topBar.style.marginTop = '0px';
   zoomRoot.style.transform = 'scale(1)';
   requestAnimationFrame(() => {
-    const topBar = document.querySelector('.top-bar');
     const topBarBottom = topBar ? topBar.getBoundingClientRect().bottom : 0;
     const availH = window.innerHeight - topBarBottom;
     const fitW = window.innerWidth / zoomRoot.scrollWidth;
@@ -1290,7 +1291,23 @@ function fitGrid() {
     const fit = Math.min(1, fitW, fitH);
     zoomRoot.style.transform = `scale(${fit})`;
     zoomRoot.style.transformOrigin = fit < 1 ? 'center top' : 'center center';
+    centerTopBar();
   });
+}
+function centerTopBar() {
+  if (is3D) return;
+  const topBar = document.querySelector('.top-bar');
+  const isVertical = document.getElementById('grids-row').classList.contains('vertical');
+  if (isVertical) {
+    topBar.style.marginTop = '0px';
+    return;
+  }
+  // Calculate margin to vertically center top-bar + scaled grid
+  const topBarH = topBar.offsetHeight;
+  const gridH = zoomRoot.scrollHeight * parseFloat((zoomRoot.style.transform.match(/scale\(([^)]+)\)/) || [,'1'])[1]);
+  const totalH = topBarH + parseInt(getComputedStyle(topBar).marginBottom) + gridH;
+  const margin = Math.max(0, (window.innerHeight - totalH) / 2);
+  topBar.style.marginTop = margin + 'px';
 }
 fitGrid();
 
@@ -1336,7 +1353,7 @@ function setViewMode(mode) {
   if (is3D) {
     zoomRoot.style.display = 'none';
     container.classList.add('active');
-    document.body.style.justifyContent = 'flex-start';
+    topBar.style.marginTop = '0px';
     if (!three) { initThree(); requestAnimationFrame(onThreeResize); }
     else rebuild3D();
     animate3D();
@@ -1345,8 +1362,6 @@ function setViewMode(mode) {
     container.classList.remove('active');
     zoomRoot.style.display = '';
     if (three) { cancelAnimationFrame(three.rafId); three.rafId = null; }
-    const isVertical = document.getElementById('grids-row').classList.contains('vertical');
-    document.body.style.justifyContent = isVertical ? 'flex-start' : 'center';
     fitGrid();
   }
 }
