@@ -1323,6 +1323,7 @@ document.addEventListener('keydown', e => {
     document.getElementById('grids-row').classList.toggle('vertical');
     fitGrid();
   }
+  if (is3D && !gs.gameOver && e.key >= '1' && e.key <= '4') selectLayer(+e.key - 1);
 });
 
 // Auto-fit: scale #zoom-root to fit viewport
