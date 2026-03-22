@@ -110,15 +110,11 @@ body {
 }
 .player-slot.active-o .player-avatar { border-color: rgba(255,217,122,0.6); box-shadow: 0 0 14px rgba(255,217,122,0.25); }
 .player-slot.active-x .player-avatar { border-color: rgba(183,132,255,0.6); box-shadow: 0 0 14px rgba(183,132,255,0.25); }
-.player-slot.winner-o .player-avatar { animation: winGlowO 0.8s ease-in-out infinite alternate; }
-.player-slot.winner-x .player-avatar { animation: winGlowX 0.8s ease-in-out infinite alternate; }
-@keyframes winGlowO {
-  from { border-color: rgba(255,217,122,0.4); box-shadow: 0 0 10px rgba(255,217,122,0.15); }
-  to   { border-color: rgba(255,217,122,0.9); box-shadow: 0 0 24px rgba(255,217,122,0.5); }
-}
-@keyframes winGlowX {
-  from { border-color: rgba(183,132,255,0.4); box-shadow: 0 0 10px rgba(183,132,255,0.15); }
-  to   { border-color: rgba(183,132,255,0.9); box-shadow: 0 0 24px rgba(183,132,255,0.5); }
+.player-slot.winner-o .player-avatar,
+.player-slot.winner-x .player-avatar { animation: winAvatarPulse 0.8s ease-in-out infinite alternate; }
+@keyframes winAvatarPulse {
+  from { background: rgba(255,220,80,0.12); }
+  to   { background: rgba(255,220,80,0.28); }
 }
 .player-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .player-name-wrap { display: flex; align-items: center; gap: 4px; min-width: 0; }
@@ -1398,8 +1394,12 @@ function setViewMode(mode) {
     zoomRoot.style.opacity = '0';
     setTimeout(() => { zoomRoot.style.display = 'none'; }, 300);
     container.classList.add('active');
-    positionTopBar();
     selectLayer(0);
+    // Force top bar to final position before measuring for 3D canvas size
+    topBar.style.transition = 'none';
+    topBar.style.marginTop = '0px';
+    topBar.offsetHeight; // force reflow
+    topBar.style.transition = '';
     if (!three) initThree();
     else rebuild3D();
     animate3D();
