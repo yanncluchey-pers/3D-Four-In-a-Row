@@ -1132,17 +1132,15 @@ function _afterPlace() {
     gs.gameOver = true; gs.scores[gs.turn]++;
     winCells = new Set(winLine.map(([l,r,c]) => `${l},${r},${c}`));
     saveState(); renderBoard();
-    if (is3D && three) setTimeout(rebuild3D, 60);
+    if (is3D && three) setTimeout(addWinHighlights3D, 60);
     setTimeout(() => showBanner('win', gs.turn), 400); return;
   }
   if (checkDraw()) {
     gs.gameOver = true; saveState(); renderBoard();
-    if (is3D && three) setTimeout(rebuild3D, 60);
     setTimeout(() => showBanner('draw', null), 400); return;
   }
   if (isInevitableDraw()) {
     gs.gameOver = true; saveState(); renderBoard();
-    if (is3D && three) setTimeout(rebuild3D, 60);
     setTimeout(() => showBanner('inevitable', null), 400); return;
   }
   gs.turn = gs.turn === 'O' ? 'X' : 'O';
@@ -1368,8 +1366,19 @@ window.addEventListener('resize', () => {
 // ═══════════════════════════════════════════════
 loadState();
 if (!gs.playerXType || gs.playerXType === 'ai') gs.playerXType = 'ai-hard';
-// Online sessions can't be restored after a page refresh — fall back to human mode
-if (gs.playerXType === 'online') gs.playerXType = 'human';
+// Attempt to restore online session after page refresh
+if (gs.playerXType === 'online') {
+  const session = loadOnlineSession();
+  if (session && session.code && session.role) {
+    onlineState.gameCode = session.code;
+    onlineState.myRole = session.role;
+    onlineState.myName = gs.names[session.role];
+    attachOnlineListener(session.code);
+    setupPresence(session.code, session.role === 'O' ? 'host' : 'guest');
+  } else {
+    gs.playerXType = 'human';
+  }
+}
 if (gs.gameOver) {
   for (const p of ['O','X']) {
     const line = checkWin(p);
@@ -1658,6 +1667,42 @@ function addSprite3D(l, r, c) {
     if (t < 1) requestAnimationFrame(pop);
   }
   requestAnimationFrame(pop);
+}
+
+// ── Add win highlights to existing 3D scene (no rebuild) ──
+function addWinHighlights3D() {
+  if (!three || !three.layerGroups) return;
+  const N = 4; const CS = 3.0 / N; const half = 1.5;
+  three.winEdges = [];
+  winCells.forEach(key => {
+    const [l, r, c] = key.split(',').map(Number);
+    const x = -half + c * CS + CS / 2;
+    const z = -half + r * CS + CS / 2;
+    const grp = three.layerGroups[l];
+    // Filled box
+    const fillGeo = new THREE.BoxGeometry(CS, CS, CS);
+    const fillMat = new THREE.MeshBasicMaterial({
+      color: 0xffdc50, transparent: true, opacity: 0.08, depthWrite: false
+    });
+    const fillMesh = new THREE.Mesh(fillGeo, fillMat);
+    fillMesh.position.set(x, CS / 2, z);
+    grp.add(fillMesh);
+    three.winEdges.push(fillMesh);
+    // Wireframe edges
+    const edgeGeo = new THREE.BoxGeometry(CS, CS, CS);
+    const edges = new THREE.EdgesGeometry(edgeGeo);
+    const edgeMat = new THREE.LineBasicMaterial({
+      color: 0xffdc50, transparent: true, opacity: 0.7
+    });
+    const wireframe = new THREE.LineSegments(edges, edgeMat);
+    wireframe.position.set(x, CS / 2, z);
+    grp.add(wireframe);
+    three.winEdges.push(wireframe);
+  });
+  // Update container game-over state and layer emphasis
+  const container = document.getElementById('view3d-container');
+  if (container) container.classList.toggle('game-over', true);
+  updateLayerEmphasis();
 }
 
 // ─── Main init ───
@@ -2333,6 +2378,16 @@ function registerGameCode(code) {
   } catch(_) {}
 }
 
+function saveOnlineSession(code, role) {
+  try { localStorage.setItem('4iar3d_online', JSON.stringify({ code, role })); } catch(_) {}
+}
+function clearOnlineSession() {
+  try { localStorage.removeItem('4iar3d_online'); } catch(_) {}
+}
+function loadOnlineSession() {
+  try { return JSON.parse(localStorage.getItem('4iar3d_online')); } catch(_) { return null; }
+}
+
 // (onlineState declared at top of script)
 // ── Seed known orphaned codes so they get cleaned up ──
 ['BBJT','BDZC','BRGP','FFRN'].forEach(c => registerGameCode(c));
@@ -2440,6 +2495,7 @@ async function onlineStartHost() {
   onlineState.gameCode = code;
   onlineState.myRole   = 'O';
   registerGameCode(code);
+  saveOnlineSession(code, 'O');
   onlineState.myName   = gs.names.O;
 
   // Build initial game state in Firebase
@@ -2498,6 +2554,7 @@ async function onlineJoin() {
   onlineState.gameCode = code;
   onlineState.myRole   = 'X';
   registerGameCode(code);
+  saveOnlineSession(code, 'X');
   onlineState.myName   = gs.names.X;
 
   // Write guest name and mark connected
@@ -2647,9 +2704,10 @@ function attachOnlineListener(code) {
         if (detectedMove && !gs.gameOver) {
           // Just pop in the new sprite — don't reanimate the whole cube
           setTimeout(() => { addSprite3D(detectedMove.l, detectedMove.r, detectedMove.c); buildHitPlanes(); }, 30);
-        } else if (gs.gameOver) {
-          // Game over — full rebuild needed for win highlights
-          setTimeout(rebuild3D, 60);
+        } else if (gs.gameOver && !prevGameOver) {
+          // Game just ended — add win highlights incrementally
+          if (detectedMove) setTimeout(() => addSprite3D(detectedMove.l, detectedMove.r, detectedMove.c), 30);
+          setTimeout(addWinHighlights3D, 60);
         }
         // Otherwise (no move, not game over) — skip rebuild entirely
       }
@@ -2767,6 +2825,7 @@ function leaveOnlineGame() {
     onlineState.gameRef = null;
   }
   onlineState = { gameCode:null, myRole:null, myName:null, gameRef:null, unsubscribe:null, opponentConnected:false };
+  clearOnlineSession();
   document.getElementById('disconnect-banner').classList.remove('active');
   document.getElementById('online-modal').classList.remove('active');
 }
