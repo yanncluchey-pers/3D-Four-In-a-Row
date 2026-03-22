@@ -1406,8 +1406,8 @@ function setViewMode(mode) {
     if (!three) initThree();
     else rebuild3D();
     animate3D();
-    // Resize after layout settles
-    requestAnimationFrame(onThreeResize);
+    // Resize after top bar animation completes (0.35s)
+    setTimeout(onThreeResize, 400);
   } else {
     container.classList.remove('active');
     if (three) { cancelAnimationFrame(three.rafId); three.rafId = null; }
@@ -2648,10 +2648,11 @@ function attachOnlineListener(code) {
         if (detectedMove && !gs.gameOver) {
           // Just pop in the new sprite — don't reanimate the whole cube
           setTimeout(() => { addSprite3D(detectedMove.l, detectedMove.r, detectedMove.c); buildHitPlanes(); }, 30);
-        } else {
-          // Game over or new game — full rebuild needed
+        } else if (gs.gameOver) {
+          // Game over — full rebuild needed for win highlights
           setTimeout(rebuild3D, 60);
         }
+        // Otherwise (no move, not game over) — skip rebuild entirely
       }
     });
 
