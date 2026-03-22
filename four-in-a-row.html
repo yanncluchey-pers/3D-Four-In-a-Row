@@ -1861,7 +1861,7 @@ function animate3D() {
   // Assembly animation: layers fly in from spread positions
   if (three.assembling) {
     three.assembleT = Math.min(1, three.assembleT + dt * 0.55);
-    const t = easeOutBack(three.assembleT);
+    const t = 1 - Math.pow(1 - three.assembleT, 3); // easeOutCubic — no overshoot
     three.layerGroups.forEach(grp => {
       grp.position.y = grp.userData.baseY + grp.userData.spreadY * (1 - t);
     });
