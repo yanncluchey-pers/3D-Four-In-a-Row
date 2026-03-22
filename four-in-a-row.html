@@ -1812,14 +1812,15 @@ function buildScene() {
     }
   }
 
-  // Last move subtle highlight in 3D
+  // Last move subtle highlight in 3D — single flat plane
   if (gs.lastMove && !gs.gameOver) {
     const { l, r, c } = gs.lastMove;
-    const fillGeo = new THREE.BoxGeometry(CS, CS, CS);
+    const fillGeo = new THREE.PlaneGeometry(CS * 0.95, CS * 0.95);
     const fillMat = new THREE.MeshBasicMaterial({
-      color: 0x78a0ff, transparent: true, opacity: 0.06, depthWrite: false
+      color: 0x78a0ff, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide
     });
     const fillMesh = new THREE.Mesh(fillGeo, fillMat);
+    fillMesh.rotation.x = -Math.PI / 2;
     fillMesh.position.set(-half + c * CS + CS / 2, CS / 2, -half + r * CS + CS / 2);
     three.layerGroups[l].add(fillMesh);
   }
