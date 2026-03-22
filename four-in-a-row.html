@@ -1360,6 +1360,8 @@ function setViewMode(mode) {
       else rebuild3D();
       animate3D();
       onThreeResize();
+      // Extra resize after a short delay to catch late layout
+      setTimeout(onThreeResize, 100);
     }));
   } else {
     container.classList.remove('active');
