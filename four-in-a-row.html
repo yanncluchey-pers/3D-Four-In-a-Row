@@ -54,6 +54,11 @@ body {
   align-items: center;
   gap: var(--gap);
   width: fit-content;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  transition: opacity 0.3s ease;
 }
 
 /* ── Top bar ── */
@@ -66,7 +71,6 @@ body {
   padding: 8px 8px;
   margin-bottom: var(--gap);
   flex-shrink: 0;
-  transition: margin-top 0.35s ease;
 }
 
 /* ── Turn indicator ── */
@@ -1279,35 +1283,13 @@ document.addEventListener('keydown', e => {
 // Auto-fit: scale #zoom-root to fit viewport
 const zoomRoot = document.getElementById('zoom-root');
 function fitGrid() {
-  const topBar = document.querySelector('.top-bar');
-  // Reset margin to measure natural top bar height
-  topBar.style.marginTop = '0px';
   zoomRoot.style.transform = 'scale(1)';
   requestAnimationFrame(() => {
-    const topBarBottom = topBar ? topBar.getBoundingClientRect().bottom : 0;
-    const availH = window.innerHeight - topBarBottom;
     const fitW = window.innerWidth / zoomRoot.scrollWidth;
-    const fitH = availH / zoomRoot.scrollHeight;
+    const fitH = window.innerHeight / zoomRoot.scrollHeight;
     const fit = Math.min(1, fitW, fitH);
     zoomRoot.style.transform = `scale(${fit})`;
-    zoomRoot.style.transformOrigin = fit < 1 ? 'center top' : 'center center';
-    centerTopBar();
   });
-}
-function centerTopBar() {
-  if (is3D) return;
-  const topBar = document.querySelector('.top-bar');
-  const isVertical = document.getElementById('grids-row').classList.contains('vertical');
-  if (isVertical) {
-    topBar.style.marginTop = '0px';
-    return;
-  }
-  // Calculate margin to vertically center top-bar + scaled grid
-  const topBarH = topBar.offsetHeight;
-  const gridH = zoomRoot.scrollHeight * parseFloat((zoomRoot.style.transform.match(/scale\(([^)]+)\)/) || [,'1'])[1]);
-  const totalH = topBarH + parseInt(getComputedStyle(topBar).marginBottom) + gridH;
-  const margin = Math.max(0, (window.innerHeight - totalH) / 2);
-  topBar.style.marginTop = margin + 'px';
 }
 fitGrid();
 
@@ -1343,7 +1325,6 @@ function setViewMode(mode) {
   is3D = mode === '3d';
   const container = document.getElementById('view3d-container');
   const zoomRoot = document.getElementById('zoom-root');
-  const topBar = document.querySelector('.top-bar');
   const btn2d = document.getElementById('btn-2d');
   const btn3d = document.getElementById('btn-3d');
 
@@ -1351,25 +1332,18 @@ function setViewMode(mode) {
   btn3d.classList.toggle('active', is3D);
 
   if (is3D) {
-    zoomRoot.style.display = 'none';
+    zoomRoot.style.opacity = '0';
+    setTimeout(() => { zoomRoot.style.display = 'none'; }, 300);
     container.classList.add('active');
-    topBar.style.marginTop = '0px';
     if (!three) initThree();
     else rebuild3D();
     animate3D();
   } else {
     container.classList.remove('active');
-    zoomRoot.style.display = '';
     if (three) { cancelAnimationFrame(three.rafId); three.rafId = null; }
-    // Disable top bar transition so it jumps to final position
-    topBar.style.transition = 'none';
     fitGrid();
-    // Force reflow then re-enable transition
-    topBar.offsetHeight;
-    topBar.style.transition = '';
-    // Fade in the grid
+    zoomRoot.style.display = '';
     zoomRoot.style.opacity = '0';
-    zoomRoot.style.transition = 'opacity 0.3s ease';
     requestAnimationFrame(() => { zoomRoot.style.opacity = '1'; });
   }
 }
