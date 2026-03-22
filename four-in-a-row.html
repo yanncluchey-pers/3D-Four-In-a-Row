@@ -1401,14 +1401,12 @@ function setViewMode(mode) {
     setTimeout(() => { zoomRoot.style.display = 'none'; }, 300);
     container.classList.add('active');
     selectLayer(0);
-    // Force top bar to final position before measuring for 3D canvas size
-    topBar.style.transition = 'none';
+    // Animate top bar up
     topBar.style.marginTop = '0px';
-    topBar.offsetHeight; // force reflow
-    topBar.style.transition = '';
     if (!three) initThree();
     else rebuild3D();
     animate3D();
+    // Resize after layout settles
     requestAnimationFrame(onThreeResize);
   } else {
     container.classList.remove('active');
