@@ -1787,6 +1787,15 @@ function buildScene() {
             // Glowing wireframe box for win cells
             const x = -half + c * CS + CS / 2;
             const z = -half + r * CS + CS / 2;
+            // Glowing filled box
+            const fillGeo = new THREE.BoxGeometry(CS, CS, CS);
+            const fillMat = new THREE.MeshBasicMaterial({
+              color: 0xffdc50, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false
+            });
+            const fillMesh = new THREE.Mesh(fillGeo, fillMat);
+            fillMesh.position.set(x, CS / 2, z);
+            three.layerGroups[l].add(fillMesh);
+            three.winEdges.push(fillMesh);
             // Glowing wireframe edges
             const edgeGeo = new THREE.BoxGeometry(CS, CS, CS);
             const edges = new THREE.EdgesGeometry(edgeGeo);
@@ -1803,19 +1812,18 @@ function buildScene() {
     }
   }
 
-  // Last move highlight in 3D — wireframe edges only (no fill)
+  // Last move highlight in 3D — subtle fill only (no edge change)
   if (gs.lastMove && !gs.gameOver) {
     const { l, r, c } = gs.lastMove;
     const x = -half + c * CS + CS / 2;
     const z = -half + r * CS + CS / 2;
-    const edgeGeo = new THREE.BoxGeometry(CS, CS, CS);
-    const edges = new THREE.EdgesGeometry(edgeGeo);
-    const edgeMat = new THREE.LineBasicMaterial({
-      color: 0x78a0ff, transparent: true, opacity: 0.4
+    const fillGeo = new THREE.BoxGeometry(CS, CS, CS);
+    const fillMat = new THREE.MeshBasicMaterial({
+      color: 0x78a0ff, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false
     });
-    const wireframe = new THREE.LineSegments(edges, edgeMat);
-    wireframe.position.set(x, CS / 2, z);
-    three.layerGroups[l].add(wireframe);
+    const fillMesh = new THREE.Mesh(fillGeo, fillMat);
+    fillMesh.position.set(x, CS / 2, z);
+    three.layerGroups[l].add(fillMesh);
   }
 
   // Update container game-over state
@@ -2168,12 +2176,16 @@ function animate3D() {
   // Update CSS layer labels to follow 3D positions
   updateLayerLabels();
 
-  // Win pulse: pulse winning cell edge opacity
+  // Win pulse: pulse winning cell fill and edge opacity
   if (three.winEdges && three.winEdges.length > 0) {
     three.winPulseT += dt * 2.5;
     const t = 0.5 + 0.5 * Math.sin(three.winPulseT);
     three.winEdges.forEach(wf => {
-      wf.material.opacity = 0.3 + 0.5 * t; // 0.3–0.8
+      if (wf.isLineSegments) {
+        wf.material.opacity = 0.3 + 0.4 * t;
+      } else {
+        wf.material.opacity = 0.05 + 0.1 * t;
+      }
     });
   }
 
