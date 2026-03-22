@@ -1812,17 +1812,29 @@ function buildScene() {
     }
   }
 
-  // Last move subtle highlight in 3D — single flat plane
+  // Last move highlight in 3D — same technique as win cells
   if (gs.lastMove && !gs.gameOver) {
     const { l, r, c } = gs.lastMove;
-    const fillGeo = new THREE.PlaneGeometry(CS * 0.95, CS * 0.95);
+    const x = -half + c * CS + CS / 2;
+    const z = -half + r * CS + CS / 2;
+    // Filled box
+    const fillGeo = new THREE.BoxGeometry(CS, CS, CS);
     const fillMat = new THREE.MeshBasicMaterial({
-      color: 0x78a0ff, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide
+      color: 0x78a0ff, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false
     });
     const fillMesh = new THREE.Mesh(fillGeo, fillMat);
-    fillMesh.rotation.x = -Math.PI / 2;
-    fillMesh.position.set(-half + c * CS + CS / 2, CS / 2, -half + r * CS + CS / 2);
+    fillMesh.position.set(x, CS / 2, z);
     three.layerGroups[l].add(fillMesh);
+    // Wireframe edges
+    const edgeGeo = new THREE.BoxGeometry(CS, CS, CS);
+    const edges = new THREE.EdgesGeometry(edgeGeo);
+    const edgeMat = new THREE.LineBasicMaterial({
+      color: 0x78a0ff, transparent: true, opacity: 0.4
+    });
+    const wireframe = new THREE.LineSegments(edges, edgeMat);
+    wireframe.position.set(x, CS / 2, z);
+    three.layerGroups[l].add(fillMesh);
+    three.layerGroups[l].add(wireframe);
   }
 
   // Update container game-over state
