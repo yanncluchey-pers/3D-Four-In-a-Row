@@ -38,6 +38,7 @@ body {
   align-items: center;
   height: 100vh;
   overflow: hidden;
+  transition: justify-content 0s;
   font-family: 'Nunito', sans-serif;
   background: radial-gradient(ellipse at 50% 60%, #1e2540 0%, #111520 100%);
   overflow-x: hidden;
@@ -63,9 +64,10 @@ body {
   gap: 10px;
   justify-content: center;
   width: 100%;
-  padding: 0 8px;
+  padding: 8px 8px;
   margin-bottom: var(--gap);
   flex-shrink: 0;
+  transition: margin-bottom 0.3s ease, padding 0.3s ease;
 }
 
 /* ── Turn indicator ── */
@@ -308,45 +310,36 @@ body {
 }
 
 
-/* ── 3D view overlay ── */
-#view3d-overlay {
-  position: fixed; inset: 0; z-index: 50;
+/* ── Inline 3D container ── */
+#view3d-container {
   display: none; flex-direction: column; align-items: center;
-  background: radial-gradient(ellipse at 50% 60%, #1e2540 0%, #111520 100%);
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  flex: 1; width: 100%; position: relative;
 }
-#view3d-overlay.active { display: flex; }
+#view3d-container.active { display: flex; }
 #three-canvas {
-  flex: 1; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none;
+  flex: 1; width: 100%; display: block; cursor: grab; touch-action: none;
 }
 #three-canvas:active { cursor: grabbing; }
-.btn-exit3d {
-  position: absolute; top: 16px; right: 16px;
-  background: rgba(30,35,55,0.85); border-color: #3a4268;
-  color: #8a9ac0; backdrop-filter: blur(8px);
-  padding: 8px 14px; font-size: 12px;
-  z-index: 10;
-}
-.btn-exit3d:hover { background: rgba(50,60,90,0.9); color: #c0ccee; border-color: #5060a0; }
-#view3d-hint {
-  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-  font-size: 11px; font-weight: 700; color: #3a4268; letter-spacing: 0.05em;
-  pointer-events: none; white-space: nowrap;
-}
-.btn-3d {
-  background: #1e2a4a; border-color: #3a5090; color: #7090ff;
-}
-.btn-3d:hover { background: #253562; border-color: #5070c0; color: #90b0ff; }
-.btn-3d.active { background: #253562; border-color: #5070c0; color: #90b0ff;
-  box-shadow: 0 0 12px rgba(100,140,255,0.3); }
 
+/* ── 2D/3D toggle ── */
+.view-toggle {
+  display: flex; background: #111520; border: 1.5px solid #232940;
+  border-radius: 10px; padding: 2px; gap: 2px;
+}
+.view-toggle-btn {
+  background: transparent; border: none; border-radius: 8px;
+  padding: 6px 12px; font-size: 12px; font-weight: 800;
+  color: #4a5478; cursor: pointer; font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+.view-toggle-btn:hover { background: rgba(255,255,255,0.04); }
+.view-toggle-btn.active { background: #2a3458; color: #a0b4e8;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
 
 /* ── 3D slice slider ── */
 #slice-control {
-  position: absolute;
-  bottom: 48px; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 10px;
-  z-index: 10; pointer-events: auto;
+  padding: 8px 0;
 }
 #slice-label {
   font-size: 10px; font-weight: 800; color: #4a5880;
@@ -561,12 +554,23 @@ body {
   <div class="turn-indicator" id="turn-indicator">…</div>
   <div class="scoreboard" id="scoreboard"></div>
   <div style="display:flex;gap:6px;flex-shrink:0">
-    <button class="btn btn-3d" id="view3d-btn" onclick="toggle3D()">⬡ 3D</button>
+    <div class="view-toggle" id="view-toggle">
+      <button class="view-toggle-btn active" id="btn-2d" onclick="setViewMode('2d')">2D</button>
+      <button class="view-toggle-btn" id="btn-3d" onclick="setViewMode('3d')">3D</button>
+    </div>
     <button class="btn" id="new-game-btn">New Game</button>
   </div>
 </div>
 <div id="zoom-root">
   <div class="grids-row" id="grids-row"></div>
+</div>
+<div id="view3d-container">
+  <canvas id="three-canvas"></canvas>
+  <div id="slice-control">
+    <span id="slice-label">ASSEMBLED</span>
+    <input id="slice-slider" type="range" min="0" max="100" value="0"
+      oninput="onSliceInput(this.value)" style="--pct:0%">
+  </div>
 </div>
 
 <div id="win-banner">
@@ -603,17 +607,6 @@ body {
   </div>
 </div>
 
-<!-- 3D View Overlay -->
-<div id="view3d-overlay">
-  <canvas id="three-canvas"></canvas>
-  <button class="btn btn-exit3d" id="exit3d-btn" onclick="toggle3D()">✕ Exit 3D</button>
-  <div id="slice-control">
-    <span id="slice-label">ASSEMBLED</span>
-    <input id="slice-slider" type="range" min="0" max="100" value="0"
-      oninput="onSliceInput(this.value)" style="--pct:0%">
-  </div>
-  <div id="view3d-hint">drag to rotate · scroll to zoom</div>
-</div>
 
 <div id="dev-panel">
   <div class="dev-stat">🍩 winning lines: <span id="dev-lines-o">—</span></div>
@@ -1302,7 +1295,11 @@ function fitGrid() {
 fitGrid();
 
 // Re-render on resize
-window.addEventListener('resize', () => { setTimeout(renderBoard, 150); fitGrid(); });
+window.addEventListener('resize', () => {
+  setTimeout(renderBoard, 150);
+  if (is3D) onThreeResize();
+  else fitGrid();
+});
 
 // ═══════════════════════════════════════════════
 // INIT
@@ -1323,19 +1320,36 @@ maybeScheduleAI();
 // ═══════════════════════════════════════════════
 // 3D VIEW ENGINE
 // ═══════════════════════════════════════════════
-function toggle3D() {
-  is3D = !is3D;
-  const overlay = document.getElementById('view3d-overlay');
-  const btn = document.getElementById('view3d-btn');
-  overlay.classList.toggle('active', is3D);
-  btn.classList.toggle('active', is3D);
-  btn.textContent = is3D ? '✕ 2D' : '⬡ 3D';
+function toggle3D() { setViewMode(is3D ? '2d' : '3d'); }
+
+function setViewMode(mode) {
+  is3D = mode === '3d';
+  const container = document.getElementById('view3d-container');
+  const zoomRoot = document.getElementById('zoom-root');
+  const btn2d = document.getElementById('btn-2d');
+  const btn3d = document.getElementById('btn-3d');
+
+  btn2d.classList.toggle('active', !is3D);
+  btn3d.classList.toggle('active', is3D);
+
   if (is3D) {
+    zoomRoot.style.display = 'none';
+    container.classList.add('active');
+    document.body.style.justifyContent = 'flex-start';
+    document.querySelector('.top-bar').style.marginBottom = '0';
     if (!three) { initThree(); requestAnimationFrame(onThreeResize); }
     else rebuild3D();
     animate3D();
+    requestAnimationFrame(onThreeResize);
   } else {
+    container.classList.remove('active');
+    zoomRoot.style.display = '';
     if (three) { cancelAnimationFrame(three.rafId); three.rafId = null; }
+    // Restore layout based on vertical mode
+    const isVertical = document.getElementById('grids-row').classList.contains('vertical');
+    document.body.style.justifyContent = isVertical ? 'flex-start' : 'center';
+    document.querySelector('.top-bar').style.marginBottom = '';
+    fitGrid();
   }
 }
 
@@ -1584,8 +1598,9 @@ function addSprite3D(l, r, c) {
 // ─── Main init ───
 function initThree() {
   const canvas = document.getElementById('three-canvas');
-  const w = canvas.clientWidth || window.innerWidth;
-  const h = canvas.clientHeight || window.innerHeight;
+  const container = document.getElementById('view3d-container');
+  const w = container.clientWidth || window.innerWidth;
+  const h = (container.clientHeight || window.innerHeight) - (document.getElementById('slice-control')?.offsetHeight || 0);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -1842,9 +1857,9 @@ function onSliceInput(val) {
 
 function onThreeResize() {
   if (!three) return;
-  const canvas = document.getElementById('three-canvas');
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
+  const container = document.getElementById('view3d-container');
+  const w = container.clientWidth;
+  const h = container.clientHeight - (document.getElementById('slice-control')?.offsetHeight || 0);
   if (!w || !h) return;
   three.renderer.setSize(w, h);
   three.camera.aspect = w / h;
@@ -1930,7 +1945,7 @@ function project3D(worldPos) {
 
 // ── Create/update floating layer labels in DOM ──
 function updateLayerLabels() {
-  const overlay = document.getElementById('view3d-overlay');
+  const container = document.getElementById('view3d-container');
   const N = 4; const CS = 3.0 / N; const half = 1.5;
   const sep = three.sliceSep || 0;
 
@@ -1940,7 +1955,7 @@ function updateLayerLabels() {
       const el = document.createElement('div');
       el.className = 'layer3d-label';
       el.textContent = 'LAYER ' + (i + 1);
-      overlay.appendChild(el);
+      container.appendChild(el);
       three.labelEls.push(el);
     }
   }
