@@ -658,7 +658,7 @@ body.dev-active #layer-selector { bottom: 44px; }
   <div class="dev-stat">🧁 winning lines: <span id="dev-lines-x">—</span></div>
   <div class="dev-stat">Cells left: <span id="dev-cells">—</span></div>
   <div class="dev-stat" id="dev-draw-stat">Draw?: <span id="dev-draw">—</span></div>
-  <button class="btn" style="padding:4px 10px;font-size:10px;margin-left:auto" onclick="localStorage.clear();location.reload()">Reset All</button>
+  <button class="btn" style="padding:4px 10px;font-size:10px;margin-left:auto" onclick="localStorage.clear();location.reload()">Reset</button>
 </div>
 <div class="dev-hint">press D for dev mode</div>
 
@@ -2658,10 +2658,27 @@ function attachOnlineListener(code) {
       ? !!data.guestConnected
       : !!data.hostConnected;
 
-    // Host: update waiting modal or keep it open if guest hasn't joined yet
+    // Host: show waiting modal if guest disconnects (with delay for rapid reconnects)
     if (onlineState.myRole === 'O' && !data.guestConnected) {
-      document.getElementById('online-modal').classList.add('active');
-      showOnlineModal('hosting', onlineState.gameCode);
+      if (wasConnected) {
+        // Guest was connected but just disconnected — delay to allow rapid reconnect
+        if (!onlineState._reconnectTimer) {
+          onlineState._reconnectTimer = setTimeout(() => {
+            onlineState._reconnectTimer = null;
+            if (!onlineState.opponentConnected) {
+              document.getElementById('online-modal').classList.add('active');
+              showOnlineModal('hosting', onlineState.gameCode);
+            }
+          }, 300);
+        }
+      } else {
+        // Guest never joined yet
+        document.getElementById('online-modal').classList.add('active');
+        showOnlineModal('hosting', onlineState.gameCode);
+      }
+    } else if (onlineState._reconnectTimer) {
+      clearTimeout(onlineState._reconnectTimer);
+      onlineState._reconnectTimer = null;
     }
 
     // ── Detect last move from board diff (find newly placed cell) ──
