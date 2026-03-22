@@ -964,11 +964,12 @@ function renderBoard() {
         const val = gs.board[l][r][c];
         const key = `${l},${r},${c}`;
         const isWin  = winCells.has(key);
-        const isLast = !isWin && !!gs.lastMove && gs.lastMove.l===l && gs.lastMove.r===r && gs.lastMove.c===c;
+        const isLastCell = !isWin && !!gs.lastMove && gs.lastMove.l===l && gs.lastMove.r===r && gs.lastMove.c===c;
+        const isLast = isLastCell && !gs._lastMoveRendered;
         let cls = 'cell';
         if (val)    cls += ' occupied';
         if (isWin)  cls += ' win-cell';
-        if (isLast) cls += ' last-move';
+        if (isLastCell) cls += ' last-move';
         cell.className = cls;
         cell.dataset.l = l; cell.dataset.r = r; cell.dataset.c = c;
         // Animate only the most-recently-placed token; all others skip the popIn
@@ -984,6 +985,7 @@ function renderBoard() {
     card.appendChild(lbl);
     gr.appendChild(card);
   }
+  gs._lastMoveRendered = true;
 }
 
 // ═══════════════════════════════════════════════
@@ -1107,6 +1109,7 @@ function _doPlace(l, r, c) {
   if (gs.gameOver || gs.board[l][r][c]) return;
   gs.board[l][r][c] = gs.turn;
   gs.lastMove = {l, r, c};
+  gs._lastMoveRendered = false;
   _afterPlace();
 }
 
@@ -1119,6 +1122,7 @@ function placeToken(l, r, c) {
     if (!onlineState.opponentConnected) return;
     // Write to Firebase — the listener will apply the move for both players
     gs.lastMove = {l, r, c};
+    gs._lastMoveRendered = false;
     onlineWriteMove(l, r, c);
     return;
   }
@@ -2694,8 +2698,9 @@ function attachOnlineListener(code) {
           if (!gs.board[li][ri][ci] && safeBoard[li][ri][ci]) { detectedMove={l:li,r:ri,c:ci}; break outer; }
     if (detectedMove) {
       gs.lastMove = detectedMove;
-    } else if (!prevGameOver) {
-      // No new move found — could be a new game reset; clear if board is empty
+      gs._lastMoveRendered = false;
+    } else {
+      // No new move found — clear lastMove if board is empty (new game)
       const boardEmpty = safeBoard.every(layer => layer.every(row => row.every(c => !c)));
       if (boardEmpty) gs.lastMove = null;
     }
