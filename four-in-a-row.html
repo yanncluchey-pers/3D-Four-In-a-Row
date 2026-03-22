@@ -243,11 +243,14 @@ body {
 #win-banner {
   position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
   z-index: 100; pointer-events: none;
+  background: rgba(0,0,0,0); transition: background 0.3s;
+}
+#win-banner.show {
+  background: rgba(0,0,0,0.7);
 }
 .splash {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   text-align: center; opacity: 0; transform: scale(0.7) translateY(20px); pointer-events: none;
-  background: rgba(0,0,0,0.55); border-radius: 24px; padding: 32px 48px;
 }
 #win-banner.show .splash { animation: splashIn 2.8s cubic-bezier(0.22,1,0.36,1) forwards; }
 @keyframes splashIn {
@@ -992,27 +995,27 @@ function aiPickMoveEasy() {
     if (checkWin(me)) { gs.board[l][r][c] = null; return [l,r,c]; }
     gs.board[l][r][c] = null;
   }
-  // Block opponent win ~55% of the time (misses ~45%)
-  if (Math.random() < 0.55) {
-    for (const [l,r,c] of empty) {
-      gs.board[l][r][c] = opp;
-      if (checkWin(opp)) { gs.board[l][r][c] = null; return [l,r,c]; }
-      gs.board[l][r][c] = null;
-    }
+  // Always block opponent's immediate win
+  for (const [l,r,c] of empty) {
+    gs.board[l][r][c] = opp;
+    if (checkWin(opp)) { gs.board[l][r][c] = null; return [l,r,c]; }
+    gs.board[l][r][c] = null;
   }
-  // Weak heuristic + heavy random noise — picks from top ~40% of moves
+  // Weak heuristic + random noise — picks from top ~40% of moves
   const scored = empty.map(([l,r,c]) => {
     let score = 0;
     for (const line of WIN_LINES) {
       if (!line.some(([ll,rr,cc]) => ll===l && rr===r && cc===c)) continue;
       const myC = scoreLineFor(line, me);
-      if (myC === 2) score += 5; else if (myC === 1) score += 1;
+      const opC = scoreLineFor(line, opp);
+      if (myC === 2) score += 6; else if (myC === 1) score += 2;
+      if (opC === 2) score += 4; // loosely block opponent buildups
     }
-    score += Math.random() * 12; // large noise keeps it unpredictable
+    score += Math.random() * 10; // noise keeps it unpredictable
     return { move: [l,r,c], score };
   });
   scored.sort((a,b) => b.score - a.score);
-  const pool = scored.slice(0, Math.max(1, Math.ceil(scored.length * 0.4)));
+  const pool = scored.slice(0, Math.max(1, Math.ceil(scored.length * 0.35)));
   return pool[Math.floor(Math.random() * pool.length)].move;
 }
 
