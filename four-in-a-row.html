@@ -1790,7 +1790,7 @@ function buildScene() {
             // Glowing filled box
             const fillGeo = new THREE.BoxGeometry(CS, CS, CS);
             const fillMat = new THREE.MeshBasicMaterial({
-              color: 0xffdc50, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false
+              color: 0xffdc50, transparent: true, opacity: 0.04, depthWrite: false
             });
             const fillMesh = new THREE.Mesh(fillGeo, fillMat);
             fillMesh.position.set(x, CS / 2, z);
@@ -1820,7 +1820,7 @@ function buildScene() {
     // Filled box
     const fillGeo = new THREE.BoxGeometry(CS, CS, CS);
     const fillMat = new THREE.MeshBasicMaterial({
-      color: 0x78a0ff, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false
+      color: 0x78a0ff, transparent: true, opacity: 0.04, depthWrite: false
     });
     const fillMesh = new THREE.Mesh(fillGeo, fillMat);
     fillMesh.position.set(x, CS / 2, z);
