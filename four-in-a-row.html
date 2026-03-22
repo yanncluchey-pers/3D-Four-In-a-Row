@@ -755,6 +755,7 @@ function defaultState() {
     names: {O: randName(NAMES_A), X: randName(NAMES_B)},
     emojiPair: randPair(),
     playerXType: 'ai-hard',
+    lastMove: null,
   };
 }
 function saveState() { try { localStorage.setItem('4iar3d', JSON.stringify(gs)); } catch(e) {} }
@@ -773,6 +774,7 @@ function loadState() {
         names:       (saved.names && saved.names.O && saved.names.X) ? saved.names : def.names,
         emojiPair:   (Array.isArray(saved.emojiPair) && saved.emojiPair.length === 2) ? saved.emojiPair : def.emojiPair,
         playerXType: saved.playerXType || def.playerXType,
+        lastMove:    saved.lastMove || null,
       };
       return;
     }
@@ -938,7 +940,7 @@ function renderToken(val, animate = false) {
 }
 
 let winCells = new Set();
-let lastMove = null;  // {l,r,c} of most recently placed token
+// lastMove is now stored in gs.lastMove
 
 function renderBoard() {
   renderScoreboard();
@@ -957,7 +959,7 @@ function renderBoard() {
         const val = gs.board[l][r][c];
         const key = `${l},${r},${c}`;
         const isWin  = winCells.has(key);
-        const isLast = !isWin && !!lastMove && lastMove.l===l && lastMove.r===r && lastMove.c===c;
+        const isLast = !isWin && !!gs.lastMove && gs.lastMove.l===l && gs.lastMove.r===r && gs.lastMove.c===c;
         let cls = 'cell';
         if (val)    cls += ' occupied';
         if (isWin)  cls += ' win-cell';
@@ -1099,7 +1101,7 @@ function maybeScheduleAI() {
 function _doPlace(l, r, c) {
   if (gs.gameOver || gs.board[l][r][c]) return;
   gs.board[l][r][c] = gs.turn;
-  lastMove = {l, r, c};
+  gs.lastMove = {l, r, c};
   _afterPlace();
 }
 
@@ -1111,12 +1113,12 @@ function placeToken(l, r, c) {
     if (gs.turn !== onlineState.myRole) return;
     if (!onlineState.opponentConnected) return;
     // Write to Firebase — the listener will apply the move for both players
-    lastMove = {l, r, c};
+    gs.lastMove = {l, r, c};
     onlineWriteMove(l, r, c);
     return;
   }
   gs.board[l][r][c] = gs.turn;
-  lastMove = {l, r, c};
+  gs.lastMove = {l, r, c};
   _afterPlace();
 }
 
@@ -1141,8 +1143,8 @@ function _afterPlace() {
   }
   gs.turn = gs.turn === 'O' ? 'X' : 'O';
   saveState(); renderBoard(); maybeScheduleAI();
-  if (is3D && three && lastMove) {
-    addSprite3D(lastMove.l, lastMove.r, lastMove.c);
+  if (is3D && three && gs.lastMove) {
+    addSprite3D(gs.lastMove.l, gs.lastMove.r, gs.lastMove.c);
     buildHitPlanes();
   }
 }
@@ -1231,7 +1233,7 @@ function closeNewGameModal() {
 }
 
 function startNewGame(keepScores = true) {
-  hideBanner(); aiThinking = false; winCells = new Set(); lastMove = null;
+  hideBanner(); aiThinking = false; winCells = new Set(); gs.lastMove = null;
   // Online new game — only host can reset
   if (gs.playerXType === 'online') {
     if (onlineState.myRole === 'O') {
@@ -1806,6 +1808,18 @@ function buildScene() {
         }
       }
     }
+  }
+
+  // Last move subtle highlight in 3D
+  if (gs.lastMove && !gs.gameOver) {
+    const { l, r, c } = gs.lastMove;
+    const fillGeo = new THREE.BoxGeometry(CS, CS, CS);
+    const fillMat = new THREE.MeshBasicMaterial({
+      color: 0x78a0ff, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false
+    });
+    const fillMesh = new THREE.Mesh(fillGeo, fillMat);
+    fillMesh.position.set(-half + c * CS + CS / 2, CS / 2, -half + r * CS + CS / 2);
+    three.layerGroups[l].add(fillMesh);
   }
 
   // Update container game-over state
@@ -2577,11 +2591,11 @@ function attachOnlineListener(code) {
         for (let ci=0; ci<4; ci++)
           if (!gs.board[li][ri][ci] && safeBoard[li][ri][ci]) { detectedMove={l:li,r:ri,c:ci}; break outer; }
     if (detectedMove) {
-      lastMove = detectedMove;
+      gs.lastMove = detectedMove;
     } else if (!prevGameOver) {
       // No new move found — could be a new game reset; clear if board is empty
       const boardEmpty = safeBoard.every(layer => layer.every(row => row.every(c => !c)));
-      if (boardEmpty) lastMove = null;
+      if (boardEmpty) gs.lastMove = null;
     }
     gs.board       = safeBoard;
     gs.turn        = safeTurn;
