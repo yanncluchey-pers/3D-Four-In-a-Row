@@ -73,6 +73,7 @@ body {
   flex-shrink: 0;
   transition: margin-top 0.35s ease;
   z-index: 1;
+  position: relative;
 }
 
 /* ── Turn indicator ── */
@@ -93,7 +94,8 @@ body {
   display: flex; flex-direction: column; align-items: stretch;
   background: #23293a; border-radius: var(--card-radius);
   box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
-  overflow: hidden; position: relative; flex-shrink: 0; width: 336px;
+  overflow: hidden; flex-shrink: 0; width: 336px;
+  position: absolute; left: 50%; transform: translateX(-50%);
 }
 .scoreboard-row {
   display: flex; align-items: center; padding: 10px 18px 12px;
@@ -561,7 +563,6 @@ body {
 
 <div class="top-bar">
   <div class="turn-indicator" id="turn-indicator">…</div>
-  <div style="flex:1"></div>
   <div class="scoreboard" id="scoreboard"></div>
   <div style="flex:1"></div>
   <div style="display:flex;gap:6px;flex-shrink:0">
