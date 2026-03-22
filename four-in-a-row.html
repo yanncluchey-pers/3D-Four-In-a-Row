@@ -1404,6 +1404,7 @@ function setViewMode(mode) {
     if (!three) initThree();
     else rebuild3D();
     animate3D();
+    requestAnimationFrame(onThreeResize);
   } else {
     container.classList.remove('active');
     if (three) { cancelAnimationFrame(three.rafId); three.rafId = null; }
@@ -1658,10 +1659,9 @@ function addSprite3D(l, r, c) {
 
 // ─── Main init ───
 function get3DSize() {
-  const topBar = document.querySelector('.top-bar');
-  const topBarBottom = topBar ? topBar.getBoundingClientRect().bottom : 0;
-  const w = window.innerWidth;
-  const h = window.innerHeight - topBarBottom;
+  const canvas = document.getElementById('three-canvas');
+  const w = canvas.clientWidth || window.innerWidth;
+  const h = canvas.clientHeight || (window.innerHeight - 60);
   return { w, h };
 }
 
@@ -1699,6 +1699,7 @@ function initThree() {
     // Assembly animation
     assembling: true, assembleT: 0,
     userHasDragged: false,
+    winEdges: [],
     // 3D interaction
     hitPlanes: [],
     hoverMesh: null,
@@ -1765,15 +1766,30 @@ function buildScene() {
   // (vertical edges are now part of each layer slice — no separate group needed)
   three.vertGrp = null;
 
-  // Sprites
+  // Sprites and win cell edge highlights
+  three.winEdges = [];
   for (let l = 0; l < 4; l++) {
     for (let r = 0; r < 4; r++) {
       for (let c = 0; c < 4; c++) {
         const val = gs.board[l][r][c];
         if (val) {
           const win = isWinCell(l, r, c);
-          const sp = makeSprite(three.layerGroups[l], l, r, c, val, win);
-          if (win) three.winSprites.push(sp);
+          makeSprite(three.layerGroups[l], l, r, c, val, false);
+          if (win) {
+            // Glowing wireframe box for win cells
+            const boxGeo = new THREE.BoxGeometry(CS, CS, CS);
+            const edges = new THREE.EdgesGeometry(boxGeo);
+            const edgeMat = new THREE.LineBasicMaterial({
+              color: 0xffdc50, transparent: true, opacity: 0.8
+            });
+            const wireframe = new THREE.LineSegments(edges, edgeMat);
+            const x = -half + c * CS + CS / 2;
+            const z = -half + r * CS + CS / 2;
+            wireframe.position.set(x, CS / 2, z);
+            wireframe.userData.baseMat = edgeMat;
+            three.layerGroups[l].add(wireframe);
+            three.winEdges.push(wireframe);
+          }
         }
       }
     }
@@ -2128,12 +2144,12 @@ function animate3D() {
   // Update CSS layer labels to follow 3D positions
   updateLayerLabels();
 
-  // Win pulse: scale winning sprites
-  if (three.winSprites.length > 0) {
+  // Win pulse: pulse winning cell edge opacity
+  if (three.winEdges && three.winEdges.length > 0) {
     three.winPulseT += dt * 2.5;
-    const pulse = 1 + 0.18 * Math.sin(three.winPulseT);
-    three.winSprites.forEach(sp => {
-      sp.scale.setScalar(sp.userData.baseScale * pulse);
+    const opacity = 0.4 + 0.5 * (0.5 + 0.5 * Math.sin(three.winPulseT));
+    three.winEdges.forEach(wf => {
+      wf.material.opacity = opacity;
     });
   }
 
