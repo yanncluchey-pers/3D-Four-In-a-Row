@@ -1354,10 +1354,13 @@ function setViewMode(mode) {
     zoomRoot.style.display = 'none';
     container.classList.add('active');
     topBar.style.marginTop = '0px';
-    if (!three) { initThree(); requestAnimationFrame(onThreeResize); }
-    else rebuild3D();
-    animate3D();
-    requestAnimationFrame(onThreeResize);
+    // Delay init/resize to after layout completes
+    requestAnimationFrame(() => {
+      if (!three) initThree();
+      else rebuild3D();
+      animate3D();
+      onThreeResize();
+    });
   } else {
     container.classList.remove('active');
     zoomRoot.style.display = '';
