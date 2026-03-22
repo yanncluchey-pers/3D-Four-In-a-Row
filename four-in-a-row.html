@@ -65,6 +65,8 @@ body {
   justify-content: center;
   width: 100%;
   padding: 0 8px;
+  margin-bottom: var(--gap);
+  flex-shrink: 0;
 }
 
 /* ── Turn indicator ── */
@@ -538,15 +540,15 @@ body {
 </head>
 <body>
 
-<div id="zoom-root">
-  <div class="top-bar">
-    <div class="turn-indicator" id="turn-indicator">…</div>
-    <div class="scoreboard" id="scoreboard" onclick="toggleScoreboardExpand(event)"></div>
-    <div style="display:flex;gap:6px;flex-shrink:0">
-      <button class="btn btn-3d" id="view3d-btn" onclick="toggle3D()">⬡ 3D</button>
-      <button class="btn" id="new-game-btn">New Game</button>
-    </div>
+<div class="top-bar">
+  <div class="turn-indicator" id="turn-indicator">…</div>
+  <div class="scoreboard" id="scoreboard" onclick="toggleScoreboardExpand(event)"></div>
+  <div style="display:flex;gap:6px;flex-shrink:0">
+    <button class="btn btn-3d" id="view3d-btn" onclick="toggle3D()">⬡ 3D</button>
+    <button class="btn" id="new-game-btn">New Game</button>
   </div>
+</div>
+<div id="zoom-root">
   <div class="grids-row" id="grids-row"></div>
 </div>
 
