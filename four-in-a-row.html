@@ -2682,6 +2682,7 @@ function attachOnlineListener(code) {
     gs.names       = safeNames;
     gs.emojiPair   = safeEmoji;
     gs.playerXType = 'online';
+    saveState();
 
     // ── Disconnect banner: only show once both have connected at least once ──
     const discBanner = document.getElementById('disconnect-banner');
