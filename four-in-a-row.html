@@ -2324,8 +2324,10 @@ if (gs.playerXType === 'online') {
     onlineState.gameCode = session.code;
     onlineState.myRole = session.role;
     onlineState.myName = gs.names[session.role];
+    onlineState.opponentConnected = true; // assume connected until listener says otherwise
     attachOnlineListener(session.code);
     setupPresence(session.code, session.role === 'O' ? 'host' : 'guest');
+    renderBoard(); // re-render with unlocked grid
   }
 }
 
