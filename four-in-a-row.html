@@ -619,7 +619,7 @@ let onlineState = {
 };
 
 // ── Mobile detection ──
-const isMobile = () => 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+const isMobile = () => matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches;
 
 // ═══════════════════════════════════════════════
 // EMOJI PAIRS & NAMES
