@@ -53,8 +53,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: var(--gap);
-  width: 100%;
-  min-width: 600px;
+  width: fit-content;
 }
 
 /* ── Top bar ── */
@@ -298,16 +297,11 @@ body {
    RESPONSIVE LAYOUT
    ══════════════════════════════════════════════════ */
 
-/* ── Desktop landscape: fixed card widths, scroll-zoom enabled ── */
-@media (min-width: 960px) {
-  .board-card { width: 220px; flex: none; }
-  .grids-row { flex-direction: row; width: fit-content; padding: 0; min-width: min(880px, 100%); }
-}
+/* ── Fixed card widths — CSS transform handles viewport fit ── */
+.board-card { width: 220px; flex: none; }
+.grids-row { flex-direction: row; width: fit-content; padding: 0; }
 
-/* ── Tablet / mid landscape: fluid cards ── */
 @media (max-width: 959px) {
-  .grids-row { flex-direction: row; }
-  .board-card { flex: 1 1 0; }
   .splash-title { font-size: 32px; }
 }
 
