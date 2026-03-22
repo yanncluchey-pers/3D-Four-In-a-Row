@@ -1354,15 +1354,9 @@ function setViewMode(mode) {
     zoomRoot.style.display = 'none';
     container.classList.add('active');
     topBar.style.marginTop = '0px';
-    // Double rAF ensures layout has flushed before measuring container
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (!three) initThree();
-      else rebuild3D();
-      animate3D();
-      onThreeResize();
-      // Extra resize after a short delay to catch late layout
-      setTimeout(onThreeResize, 100);
-    }));
+    if (!three) initThree();
+    else rebuild3D();
+    animate3D();
   } else {
     container.classList.remove('active');
     zoomRoot.style.display = '';
@@ -1614,11 +1608,17 @@ function addSprite3D(l, r, c) {
 }
 
 // ─── Main init ───
+function get3DSize() {
+  const topBar = document.querySelector('.top-bar');
+  const slider = document.getElementById('slice-control');
+  const w = window.innerWidth;
+  const h = window.innerHeight - (topBar ? topBar.offsetHeight : 0) - (slider ? slider.offsetHeight : 0);
+  return { w, h };
+}
+
 function initThree() {
   const canvas = document.getElementById('three-canvas');
-  const container = document.getElementById('view3d-container');
-  const w = container.clientWidth || window.innerWidth;
-  const h = (container.clientHeight || window.innerHeight) - (document.getElementById('slice-control')?.offsetHeight || 0);
+  const { w, h } = get3DSize();
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -1875,9 +1875,7 @@ function onSliceInput(val) {
 
 function onThreeResize() {
   if (!three) return;
-  const container = document.getElementById('view3d-container');
-  const w = container.clientWidth;
-  const h = container.clientHeight - (document.getElementById('slice-control')?.offsetHeight || 0);
+  const { w, h } = get3DSize();
   if (!w || !h) return;
   three.renderer.setSize(w, h);
   three.camera.aspect = w / h;
