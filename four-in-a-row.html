@@ -366,7 +366,7 @@ body.dev-active #layer-selector { bottom: 44px; }
   position: fixed; bottom: 14px; right: 18px;
   display: none; align-items: center; gap: 4px;
 }
-#view3d-container.active #layer-selector { display: flex; }
+#view3d-container.active:not(.game-over) #layer-selector { display: flex; }
 .layer-btn {
   background: #1a2038; border: 1.5px solid #232940; border-radius: 8px;
   padding: 5px 10px; font-size: 10px; font-weight: 800;
@@ -1795,17 +1795,18 @@ function buildScene() {
     }
   }
 
-  // Build hit planes for cell selection
-  buildHitPlanes();
+  // Update container game-over state
+  const container = document.getElementById('view3d-container');
+  if (container) container.classList.toggle('game-over', !!gs.gameOver);
 
-  // If game is won, find best camera angle
-  if (gs.gameOver && winCells.size > 0) {
-    positionCameraForWin();
-  }
-  three.autoRotate = true;
-  if (!gs.gameOver) {
+  if (gs.gameOver) {
+    // No hit planes or layer emphasis when game is over
+    if (winCells.size > 0) positionCameraForWin();
+  } else {
+    buildHitPlanes();
     three.userHasDragged = false;
   }
+  three.autoRotate = true;
 }
 
 // ── Position camera to best view the win line ──
@@ -1994,7 +1995,7 @@ function buildHitPlanes() {
 function updateLayerEmphasis() {
   if (!three) return;
   three.layerGroups.forEach((grp, i) => {
-    grp.userData.targetOpacity = i === selectedLayer ? 1.0 : 0.25;
+    grp.userData.targetOpacity = gs.gameOver ? 1.0 : (i === selectedLayer ? 1.0 : 0.25);
   });
 }
 
