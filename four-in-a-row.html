@@ -324,16 +324,18 @@ body {
 
 /* ── 2D/3D toggle ── */
 .view-toggle {
-  display: flex; background: #111520; border: 1.5px solid #232940;
-  border-radius: 10px; padding: 2px; gap: 2px;
+  display: flex; background: #2a3150; border: 1.5px solid #3a4268;
+  border-radius: 12px; padding: 2px; gap: 2px;
+  transition: border-color 0.15s;
 }
+.view-toggle:hover { border-color: #5060a0; }
 .view-toggle-btn {
-  background: transparent; border: none; border-radius: 8px;
-  padding: 6px 12px; font-size: 12px; font-weight: 800;
-  color: #4a5478; cursor: pointer; font-family: inherit;
+  background: transparent; border: none; border-radius: 10px;
+  padding: 8px 12px; font-size: 12px; font-weight: 800;
+  color: #8a9ac0; cursor: pointer; font-family: inherit;
   transition: background 0.15s, color 0.15s;
 }
-.view-toggle-btn:hover { background: rgba(255,255,255,0.04); }
+.view-toggle-btn:hover { background: #333d60; color: #c0ccee; }
 .view-toggle-btn.active { background: #2a3458; color: #a0b4e8;
   box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
 
