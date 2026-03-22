@@ -1615,7 +1615,7 @@ function buildVerticalEdgesOnly(grp) {
 function makeSprite(scene, l, r, c, player, isWin) {
   const emoji = player === 'O' ? gs.emojiPair[0] : gs.emojiPair[1];
   const tex = makeEmojiTexture(emoji, isWin);
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: isWin ? 1 : 0.88 });
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.88, depthWrite: false, alphaTest: 0.01 });
   const sprite = new THREE.Sprite(mat);
 
   const CS = 3.0 / 4; const half = 1.5;
@@ -1785,7 +1785,7 @@ function buildScene() {
             // Glowing filled box
             const fillGeo = new THREE.BoxGeometry(CS, CS, CS);
             const fillMat = new THREE.MeshBasicMaterial({
-              color: 0xffdc50, transparent: true, opacity: 0.15, side: THREE.DoubleSide
+              color: 0xffdc50, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false
             });
             const fillMesh = new THREE.Mesh(fillGeo, fillMat);
             fillMesh.position.set(x, CS / 2, z);
@@ -2157,12 +2157,16 @@ function animate3D() {
   // Update CSS layer labels to follow 3D positions
   updateLayerLabels();
 
-  // Win pulse: pulse winning cell edge opacity
+  // Win pulse: pulse winning cell fill and edge opacity
   if (three.winEdges && three.winEdges.length > 0) {
     three.winPulseT += dt * 2.5;
-    const opacity = 0.4 + 0.5 * (0.5 + 0.5 * Math.sin(three.winPulseT));
+    const t = 0.5 + 0.5 * Math.sin(three.winPulseT);
     three.winEdges.forEach(wf => {
-      wf.material.opacity = opacity;
+      if (wf.isLineSegments) {
+        wf.material.opacity = 0.3 + 0.4 * t; // edges: 0.3–0.7
+      } else {
+        wf.material.opacity = 0.05 + 0.1 * t; // fill: 0.05–0.15
+      }
     });
   }
 
