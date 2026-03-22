@@ -34,10 +34,9 @@ html, body { width: 100%; } html { overflow-x: hidden; }
 body {
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: center;
   align-items: center;
   min-height: 100vh;
-  padding-top: 12px;
   font-family: 'Nunito', sans-serif;
   background: radial-gradient(ellipse at 50% 60%, #1e2540 0%, #111520 100%);
   overflow-x: hidden;
@@ -1268,17 +1267,19 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Auto-fit: scale #zoom-root to fit viewport width
+// Auto-fit: scale #zoom-root to fit viewport
 const zoomRoot = document.getElementById('zoom-root');
 function fitGrid() {
   zoomRoot.style.transform = 'scale(1)';
   requestAnimationFrame(() => {
     const topBar = document.querySelector('.top-bar');
-    const availH = window.innerHeight - (topBar ? topBar.offsetHeight : 0) - 20;
+    const topBarBottom = topBar ? topBar.getBoundingClientRect().bottom : 0;
+    const availH = window.innerHeight - topBarBottom;
     const fitW = window.innerWidth / zoomRoot.scrollWidth;
     const fitH = availH / zoomRoot.scrollHeight;
     const fit = Math.min(1, fitW, fitH);
     zoomRoot.style.transform = `scale(${fit})`;
+    zoomRoot.style.transformOrigin = fit < 1 ? 'center top' : 'center center';
   });
 }
 fitGrid();
