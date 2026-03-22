@@ -352,6 +352,23 @@ body {
   display: none; align-items: center; gap: 10px;
 }
 #view3d-container.active #slice-control { display: flex; }
+
+/* ── 3D layer selector ── */
+#layer-selector {
+  position: fixed; bottom: 14px; left: 18px;
+  display: none; align-items: center; gap: 4px;
+}
+#view3d-container.active #layer-selector { display: flex; }
+.layer-btn {
+  background: #1a2038; border: 1.5px solid #232940; border-radius: 8px;
+  padding: 5px 10px; font-size: 10px; font-weight: 800;
+  color: #4a5478; cursor: pointer; font-family: inherit;
+  letter-spacing: 0.06em;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.layer-btn:hover { background: #2a3458; color: #8a9ac0; }
+.layer-btn.active { background: #2a3458; color: #a0b4e8; border-color: #3a5090;
+  box-shadow: 0 0 8px rgba(100,140,255,0.25); }
 #slice-label {
   font-size: 10px; font-weight: 800; color: #4a5880;
   letter-spacing: 0.08em; white-space: nowrap; min-width: 52px; text-align: right;
@@ -578,6 +595,12 @@ body {
 </div>
 <div id="view3d-container">
   <canvas id="three-canvas"></canvas>
+  <div id="layer-selector">
+    <button class="layer-btn active" onclick="selectLayer(0)">L1</button>
+    <button class="layer-btn" onclick="selectLayer(1)">L2</button>
+    <button class="layer-btn" onclick="selectLayer(2)">L3</button>
+    <button class="layer-btn" onclick="selectLayer(3)">L4</button>
+  </div>
   <div id="slice-control">
     <span id="slice-label">ASSEMBLED</span>
     <input id="slice-slider" type="range" min="0" max="100" value="0"
@@ -649,6 +672,7 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 // ── Early state declarations (must precede all render functions) ──
 let three = null;
 let is3D = false;
+let selectedLayer = 0;
 let pendingModeSwitch = null; // mode type to switch to after abandon confirm
 // onlineState declared here so renderScoreboard can reference it before Firebase loads
 let onlineState = {
@@ -1357,6 +1381,7 @@ function setViewMode(mode) {
     setTimeout(() => { zoomRoot.style.display = 'none'; }, 300);
     container.classList.add('active');
     positionTopBar();
+    selectLayer(0);
     if (!three) initThree();
     else rebuild3D();
     animate3D();
@@ -1654,10 +1679,18 @@ function initThree() {
     labelEls: [],    // DOM label elements
     // Assembly animation
     assembling: true, assembleT: 0,
+    // 3D interaction
+    hitPlanes: [],
+    hoverMesh: null,
+    hoveredCell: null,
+    raycaster: new THREE.Raycaster(),
+    mouse: new THREE.Vector2(),
+    clickStart: null,
   };
 
   buildScene();
   setupDrag();
+  setup3DInteraction();
 
   window.addEventListener('resize', onThreeResize);
   // Ensure correct size after overlay becomes visible
@@ -1722,6 +1755,9 @@ function buildScene() {
       }
     }
   }
+
+  // Build hit planes for cell selection
+  buildHitPlanes();
 
   // If game is won, find best camera angle
   if (gs.gameOver && winCells.size > 0) {
@@ -1866,6 +1902,123 @@ function setupDrag() {
   }, {passive: false});
 }
 
+// ── 3D cell interaction: hit planes, hover, click ──
+function buildHitPlanes() {
+  if (!three) return;
+  // Remove old hit planes
+  three.hitPlanes.forEach(m => { m.parent?.remove(m); m.geometry.dispose(); m.material.dispose(); });
+  three.hitPlanes = [];
+  // Remove old hover mesh
+  if (three.hoverMesh) { three.hoverMesh.parent?.remove(three.hoverMesh); three.hoverMesh = null; }
+  three.hoveredCell = null;
+
+  const N = 4; const CS = 3.0 / N; const half = 1.5;
+  const l = selectedLayer;
+  const grp = three.layerGroups[l];
+  if (!grp) return;
+
+  // Create hover highlight mesh (reusable)
+  const hoverGeo = new THREE.PlaneGeometry(CS * 0.9, CS * 0.9);
+  const hoverMat = new THREE.MeshBasicMaterial({
+    color: gs.turn === 'O' ? 0xffd97a : 0xb784ff,
+    transparent: true, opacity: 0.25, side: THREE.DoubleSide
+  });
+  three.hoverMesh = new THREE.Mesh(hoverGeo, hoverMat);
+  three.hoverMesh.visible = false;
+  grp.add(three.hoverMesh);
+
+  // Create invisible hit planes for each empty cell
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const geo = new THREE.PlaneGeometry(CS, CS);
+      const mat = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
+      const mesh = new THREE.Mesh(geo, mat);
+      const x = -half + c * CS + CS / 2;
+      const y = CS / 2;
+      const z = -half + r * CS + CS / 2;
+      mesh.position.set(x, y, z);
+      mesh.rotation.x = -Math.PI / 2; // lay flat
+      mesh.userData = { l, r, c };
+      grp.add(mesh);
+      three.hitPlanes.push(mesh);
+    }
+  }
+
+  // Update layer emphasis
+  updateLayerEmphasis();
+}
+
+function updateLayerEmphasis() {
+  if (!three) return;
+  three.layerGroups.forEach((grp, i) => {
+    grp.userData.targetOpacity = i === selectedLayer ? 1.0 : 0.25;
+  });
+}
+
+function selectLayer(l) {
+  selectedLayer = l;
+  // Update button active states
+  document.querySelectorAll('.layer-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', i === l);
+  });
+  if (three) buildHitPlanes();
+}
+
+function setup3DInteraction() {
+  const canvas = document.getElementById('three-canvas');
+  let downX = 0, downY = 0;
+
+  // Track mousedown position to distinguish click from drag
+  canvas.addEventListener('mousedown', e => {
+    downX = e.clientX; downY = e.clientY;
+  });
+
+  canvas.addEventListener('mouseup', e => {
+    if (!three) return;
+    const dx = e.clientX - downX, dy = e.clientY - downY;
+    if (Math.sqrt(dx*dx + dy*dy) < 5 && three.hoveredCell) {
+      const { l, r, c } = three.hoveredCell;
+      placeToken(l, r, c);
+    }
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    if (!three || three.dragging) return;
+    const rect = canvas.getBoundingClientRect();
+    three.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    three.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    three.raycaster.setFromCamera(three.mouse, three.camera);
+    const hits = three.raycaster.intersectObjects(three.hitPlanes);
+    if (hits.length > 0) {
+      const { l, r, c } = hits[0].object.userData;
+      if (!gs.board[l][r][c] && !gs.gameOver) {
+        three.hoveredCell = { l, r, c };
+        const CS = 3.0 / 4; const half = 1.5;
+        three.hoverMesh.position.set(-half + c * CS + CS / 2, CS / 2 + 0.01, -half + r * CS + CS / 2);
+        three.hoverMesh.rotation.x = -Math.PI / 2;
+        // Update color for current player
+        three.hoverMesh.material.color.set(gs.turn === 'O' ? 0xffd97a : 0xb784ff);
+        three.hoverMesh.visible = true;
+        canvas.style.cursor = 'pointer';
+      } else {
+        three.hoveredCell = null;
+        three.hoverMesh.visible = false;
+        canvas.style.cursor = 'grab';
+      }
+    } else {
+      three.hoveredCell = null;
+      if (three.hoverMesh) three.hoverMesh.visible = false;
+      canvas.style.cursor = 'grab';
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    if (!three) return;
+    three.hoveredCell = null;
+    if (three.hoverMesh) three.hoverMesh.visible = false;
+  });
+}
+
 // ── Slice slider handler ──
 function onSliceInput(val) {
   if (!three) return;
@@ -1935,6 +2088,16 @@ function animate3D() {
     // Show/hide global vertical edges (they look wrong when layers separate)
     if (three.vertGrp) three.vertGrp.visible = sep < 0.05;
   }
+
+  // Lerp layer opacity for emphasis
+  three.layerGroups.forEach(grp => {
+    const target = grp.userData.targetOpacity ?? 1;
+    grp.traverse(child => {
+      if (child.material && child.material.opacity !== undefined && !child.userData.isHitPlane) {
+        child.material.opacity += (target - child.material.opacity) * 0.1;
+      }
+    });
+  });
 
   // Update CSS layer labels to follow 3D positions
   updateLayerLabels();
