@@ -801,8 +801,9 @@ function renderScoreboard() {
 
   const isOnlineMode = gs.playerXType === 'online';
   // Badge shows connection status of the OPPONENT (always next to the other player's name)
+  const oppShowConnected = onlineState.opponentConnected || !!onlineState._reconnectTimer;
   const onlineBadgeHtml = isOnlineMode
-    ? `<span class="online-badge ${onlineState.opponentConnected ? 'connected' : 'waiting'}">${onlineState.opponentConnected ? '● ONLINE' : '○ WAITING'}</span>`
+    ? `<span class="online-badge ${oppShowConnected ? 'connected' : 'waiting'}">${oppShowConnected ? '● ONLINE' : '○ WAITING'}</span>`
     : '';
   // If I'm O (host), opponent is X → badge on X. If I'm X (guest), opponent is O → badge on O.
   const badgeOnO = isOnlineMode && onlineState.myRole === 'X';
