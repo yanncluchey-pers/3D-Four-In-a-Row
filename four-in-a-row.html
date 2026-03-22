@@ -2747,6 +2747,10 @@ function setupPresence(code, role) {
   const fieldName = role === 'host' ? 'hostConnected' : 'guestConnected';
   const gameRef   = fbDb.ref(`games/${code}`);
 
+  // Cancel any previous onDisconnect handlers (e.g., from before a refresh)
+  gameRef.onDisconnect().cancel();
+  gameRef.child(fieldName).onDisconnect().cancel();
+
   // Mark as connected now
   gameRef.update({ [fieldName]: true });
   // When this client disconnects, mark as offline
@@ -2754,7 +2758,7 @@ function setupPresence(code, role) {
 
   // Also clean up whole game after 30min inactivity (only host does this)
   if (role === 'host') {
-    fbDb.ref(`games/${code}`).onDisconnect().remove();
+    gameRef.update({ lastActivity: firebase.database.ServerValue.TIMESTAMP });
   }
 }
 
