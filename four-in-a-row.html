@@ -2744,6 +2744,8 @@ function setupPresence(code, role) {
   const fieldName = role === 'host' ? 'hostConnected' : 'guestConnected';
   const gameRef   = fbDb.ref(`games/${code}`);
 
+  // Mark as connected now
+  gameRef.update({ [fieldName]: true });
   // When this client disconnects, mark as offline
   gameRef.child(fieldName).onDisconnect().set(false);
 
