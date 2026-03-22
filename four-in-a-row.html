@@ -1361,7 +1361,16 @@ function setViewMode(mode) {
     container.classList.remove('active');
     zoomRoot.style.display = '';
     if (three) { cancelAnimationFrame(three.rafId); three.rafId = null; }
+    // Disable top bar transition so it jumps to final position
+    topBar.style.transition = 'none';
     fitGrid();
+    // Force reflow then re-enable transition
+    topBar.offsetHeight;
+    topBar.style.transition = '';
+    // Fade in the grid
+    zoomRoot.style.opacity = '0';
+    zoomRoot.style.transition = 'opacity 0.3s ease';
+    requestAnimationFrame(() => { zoomRoot.style.opacity = '1'; });
   }
 }
 
