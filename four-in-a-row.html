@@ -1354,13 +1354,13 @@ function setViewMode(mode) {
     zoomRoot.style.display = 'none';
     container.classList.add('active');
     topBar.style.marginTop = '0px';
-    // Delay init/resize to after layout completes
-    requestAnimationFrame(() => {
+    // Double rAF ensures layout has flushed before measuring container
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       if (!three) initThree();
       else rebuild3D();
       animate3D();
       onThreeResize();
-    });
+    }));
   } else {
     container.classList.remove('active');
     zoomRoot.style.display = '';
