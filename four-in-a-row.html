@@ -2059,6 +2059,13 @@ function setup3DInteraction() {
 
   canvas.addEventListener('mousemove', e => {
     if (!three || three.dragging) return;
+    // In online mode, only allow hover on your turn
+    if (gs.playerXType === 'online' && gs.turn !== onlineState.myRole) {
+      three.hoveredCell = null;
+      if (three.hoverMesh) three.hoverMesh.visible = false;
+      canvas.style.cursor = 'grab';
+      return;
+    }
     const rect = canvas.getBoundingClientRect();
     three.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     three.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -2640,7 +2647,7 @@ function attachOnlineListener(code) {
       if (is3D && three) {
         if (detectedMove && !gs.gameOver) {
           // Just pop in the new sprite — don't reanimate the whole cube
-          setTimeout(() => addSprite3D(detectedMove.l, detectedMove.r, detectedMove.c), 30);
+          setTimeout(() => { addSprite3D(detectedMove.l, detectedMove.r, detectedMove.c); buildHitPlanes(); }, 30);
         } else {
           // Game over or new game — full rebuild needed
           setTimeout(rebuild3D, 60);
