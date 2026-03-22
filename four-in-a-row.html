@@ -81,15 +81,13 @@ body {
 .turn-indicator.active-o { color: #ffd97a; border-color: rgba(255,217,122,0.4); }
 .turn-indicator.active-x { color: #b784ff; border-color: rgba(183,132,255,0.4); }
 
-/* ── Scoreboard (expandable) ── */
+/* ── Scoreboard ── */
 .scoreboard {
   display: flex; flex-direction: column; align-items: stretch;
   background: #23293a; border-radius: var(--card-radius);
   box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
-  cursor: pointer; transition: box-shadow 0.2s;
   overflow: hidden; position: relative; flex-shrink: 0; max-width: 320px;
 }
-.scoreboard:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1.5px rgba(255,255,255,0.07); }
 .scoreboard-row {
   display: flex; align-items: center; gap: 16px; padding: 10px 18px 12px;
 }
@@ -119,18 +117,7 @@ body {
 .player-score { font-size: var(--score-font); font-weight: 900; color: #fff; line-height: 1; }
 .vs-divider { font-size: 11px; font-weight: 900; color: #4a5268; letter-spacing: 0.1em; flex-shrink: 0; }
 
-/* Mode picker — segmented control */
-.scoreboard-picker {
-  display: flex; flex-direction: row;
-  padding: 0 8px; max-height: 0; overflow: hidden;
-  transition: max-height 0.28s cubic-bezier(0.4,0,0.2,1), padding-bottom 0.28s;
-}
-.scoreboard.expanded .scoreboard-picker { max-height: 110px; padding: 0 8px 10px; }
-.scoreboard-picker-inner {
-  display: flex; flex-direction: row;
-  background: #111520; border: 1.5px solid #232940; border-radius: 12px;
-  padding: 4px; gap: 3px; width: 100%;
-}
+/* Mode card (reused in new game modal) */
 .mode-card {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 5px; border-radius: 9px; padding: 8px 4px; cursor: pointer; flex: 1;
@@ -142,10 +129,6 @@ body {
 .mode-card-icon { font-size: 22px; line-height: 1; }
 .mode-card-label { font-size: 11px; font-weight: 800; color: #4a5478; white-space: nowrap; text-align: center; }
 .mode-card.active .mode-card-label { color: #a0b4e8; }
-.sb-chevron {
-  display: none;
-}
-.scoreboard.expanded .sb-chevron { transform: translateX(-50%) rotate(180deg); }
 
 /* ── Buttons ── */
 .btn {
@@ -397,6 +380,41 @@ body {
   transition: opacity 0.2s;
 }
 
+/* New game modal */
+#newgame-modal {
+  position: fixed; inset: 0; z-index: 200;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(8,10,18,0.92);
+}
+#newgame-modal.active { display: flex; }
+.newgame-panel {
+  background: #191e2d;
+  border: 1.5px solid #2a3356;
+  border-radius: 24px;
+  padding: 32px 28px 24px;
+  width: min(400px, 92vw);
+  display: flex; flex-direction: column; align-items: center; gap: 20px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04);
+}
+.newgame-panel h2 {
+  font-size: 22px; font-weight: 900; color: #c8d4f0;
+  letter-spacing: -0.02em; text-align: center; margin: 0;
+}
+.newgame-panel .sub {
+  font-size: 12px; font-weight: 700; color: #4a5878;
+  text-align: center; margin-top: -12px;
+}
+.newgame-modes {
+  display: flex; flex-direction: row; gap: 6px; width: 100%;
+  background: #111520; border: 1.5px solid #232940; border-radius: 12px;
+  padding: 6px;
+}
+.newgame-modes .mode-card {
+  padding: 14px 4px; gap: 8px;
+}
+.newgame-modes .mode-card-icon { font-size: 28px; }
+.newgame-modes .mode-card-label { font-size: 12px; }
+
 /* Abandon confirm overlay */
 #abandon-confirm {
   position: fixed; inset: 0; z-index: 210;
@@ -541,7 +559,7 @@ body {
 
 <div class="top-bar">
   <div class="turn-indicator" id="turn-indicator">…</div>
-  <div class="scoreboard" id="scoreboard" onclick="toggleScoreboardExpand(event)"></div>
+  <div class="scoreboard" id="scoreboard"></div>
   <div style="display:flex;gap:6px;flex-shrink:0">
     <button class="btn btn-3d" id="view3d-btn" onclick="toggle3D()">⬡ 3D</button>
     <button class="btn" id="new-game-btn">New Game</button>
@@ -564,6 +582,13 @@ body {
 <!-- Online Multiplayer Modal -->
 <div id="online-modal">
   <div class="online-panel" id="online-panel-inner">
+    <!-- content injected by JS -->
+  </div>
+</div>
+
+<!-- New Game Modal -->
+<div id="newgame-modal">
+  <div class="newgame-panel" id="newgame-panel-inner">
     <!-- content injected by JS -->
   </div>
 </div>
@@ -721,7 +746,6 @@ function loadState() {
 // ═══════════════════════════════════════════════
 // RENDER — scoreboard
 // ═══════════════════════════════════════════════
-let sbExpanded = false;
 
 function renderScoreboard() {
   const sb = document.getElementById('scoreboard');
@@ -731,7 +755,6 @@ function renderScoreboard() {
   const xThinking = isXActive && xIsAI;
   const aiDifficulty = gs.playerXType === 'ai-easy' ? 'EASY' : gs.playerXType === 'ai-hard' ? 'HARD' : '';
 
-  sb.classList.toggle('expanded', sbExpanded);
   const isOnlineMode = gs.playerXType === 'online';
   // Badge shows connection status of the OPPONENT (always next to the other player's name)
   const onlineBadgeHtml = isOnlineMode
@@ -771,27 +794,6 @@ function renderScoreboard() {
         </div>
       </div>
     </div>
-    <div class="scoreboard-picker">
-      <div class="scoreboard-picker-inner">
-        <div class="mode-card ${!xIsAI && !isOnlineMode?'active':''}" onclick="pickMode(event,'human')">
-          <div class="mode-card-icon">👥</div>
-          <div class="mode-card-label">Local 2P</div>
-        </div>
-        <div class="mode-card ${gs.playerXType==='ai-easy'?'active':''}" onclick="pickMode(event,'ai-easy')">
-          <div class="mode-card-icon">🤖</div>
-          <div class="mode-card-label">Easy AI</div>
-        </div>
-        <div class="mode-card ${gs.playerXType==='ai-hard'?'active':''}" onclick="pickMode(event,'ai-hard')">
-          <div class="mode-card-icon">💀</div>
-          <div class="mode-card-label">Hard AI</div>
-        </div>
-        <div class="mode-card ${isOnlineMode?'active':''}" onclick="pickMode(event,'online')">
-          <div class="mode-card-icon">🌐</div>
-          <div class="mode-card-label">Online</div>
-        </div>
-      </div>
-    </div>
-    <div class="sb-chevron">▼</div>
   `;
 
   const ti = document.getElementById('turn-indicator');
@@ -847,15 +849,8 @@ function renderScoreboard() {
   updateDevPanel();
 }
 
-function toggleScoreboardExpand(e) {
-  if (e.target.closest('.player-name') || e.target.closest('.scoreboard-picker-inner') || e.target.closest('.ai-badge')) return;
-  sbExpanded = !sbExpanded;
-  document.getElementById('scoreboard').classList.toggle('expanded', sbExpanded);
-}
-function pickMode(e, type) {
-  e.stopPropagation();
-  sbExpanded = false;
-  document.getElementById('scoreboard').classList.remove('expanded');
+function pickMode(type) {
+  closeNewGameModal();
 
   if (type === 'online') {
     showOnlineModal('choose');
@@ -872,13 +867,8 @@ function pickMode(e, type) {
     leaveOnlineGame();
   }
 
-  const wasOver = gs.gameOver;
   gs.playerXType = type; saveState();
-  if (wasOver) {
-    startNewGame(false);
-  } else {
-    renderScoreboard(); maybeScheduleAI();
-  }
+  startNewGame(true);
 }
 
 function cancelAbandon() {
@@ -1149,8 +1139,6 @@ function hideBanner() { document.getElementById('win-banner').classList.remove('
 // ═══════════════════════════════════════════════
 // NEW GAME
 // ═══════════════════════════════════════════════
-let newGameConfirm = false, confirmTimer = null;
-
 function isGameInProgress() {
   for (let l=0;l<4;l++) for (let r=0;r<4;r++) for (let c=0;c<4;c++)
     if (gs.board[l][r][c]) return !gs.gameOver;
@@ -1158,23 +1146,51 @@ function isGameInProgress() {
 }
 
 function triggerNewGame() {
-  const btn = document.getElementById('new-game-btn');
-  if (isGameInProgress()) {
-    if (!newGameConfirm) {
-      newGameConfirm = true; btn.textContent = 'Sure?'; btn.classList.add('confirm');
-      confirmTimer = setTimeout(() => {
-        newGameConfirm = false; btn.textContent = 'New Game'; btn.classList.remove('confirm');
-      }, 2500);
-      return;
-    }
-    clearTimeout(confirmTimer);
-    newGameConfirm = false; btn.textContent = 'New Game'; btn.classList.remove('confirm');
-  }
-  startNewGame(true);
+  showNewGameModal();
+}
+
+function showNewGameModal() {
+  const modal = document.getElementById('newgame-modal');
+  const panel = document.getElementById('newgame-panel-inner');
+  const inProgress = isGameInProgress();
+  const xIsAI = gs.playerXType === 'ai-easy' || gs.playerXType === 'ai-hard';
+  const isOnlineMode = gs.playerXType === 'online';
+
+  const modeCards = `
+    <div class="newgame-modes">
+      <div class="mode-card ${!xIsAI && !isOnlineMode?'active':''}" onclick="pickMode('human')">
+        <div class="mode-card-icon">👥</div>
+        <div class="mode-card-label">Local 2P</div>
+      </div>
+      <div class="mode-card ${gs.playerXType==='ai-easy'?'active':''}" onclick="pickMode('ai-easy')">
+        <div class="mode-card-icon">🤖</div>
+        <div class="mode-card-label">Easy AI</div>
+      </div>
+      <div class="mode-card ${gs.playerXType==='ai-hard'?'active':''}" onclick="pickMode('ai-hard')">
+        <div class="mode-card-icon">💀</div>
+        <div class="mode-card-label">Hard AI</div>
+      </div>
+      <div class="mode-card ${isOnlineMode?'active':''}" onclick="pickMode('online')">
+        <div class="mode-card-icon">🌐</div>
+        <div class="mode-card-label">Online</div>
+      </div>
+    </div>`;
+
+  panel.innerHTML = `
+    <h2>New Game</h2>
+    ${inProgress ? '<p class="sub">A game is in progress. Start a new one?</p>' : '<p class="sub">Choose a game mode</p>'}
+    ${modeCards}
+    <button class="btn btn-back" onclick="closeNewGameModal()">Cancel</button>
+  `;
+  modal.classList.add('active');
+}
+
+function closeNewGameModal() {
+  document.getElementById('newgame-modal').classList.remove('active');
 }
 
 function startNewGame(keepScores = true) {
-  hideBanner(); aiThinking = false; sbExpanded = false; winCells = new Set(); lastMove = null;
+  hideBanner(); aiThinking = false; winCells = new Set(); lastMove = null;
   // Online new game — only host can reset
   if (gs.playerXType === 'online') {
     if (onlineState.myRole === 'O') {
@@ -1259,10 +1275,7 @@ document.getElementById('scoreboard').addEventListener('click', e => {
 document.getElementById('new-game-btn').addEventListener('click', triggerNewGame);
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && sbExpanded) {
-    sbExpanded = false;
-    document.getElementById('scoreboard').classList.remove('expanded');
-  }
+  if (e.key === 'Escape') closeNewGameModal();
   if ((e.key === 'd' || e.key === 'D') && !isMobile()) toggleDevMode();
   if (e.key === 'm' || e.key === 'M') {
     const gr = document.getElementById('grids-row');
