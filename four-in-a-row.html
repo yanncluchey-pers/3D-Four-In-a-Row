@@ -1867,13 +1867,6 @@ function setupDrag() {
     // Hand off velocity to momentum system
     three.momentumX = velX * 0.008;
     three.momentumY = velY * 0.008;
-    // Resume auto-rotate only if game not won (after momentum dies down)
-    if (!gs.gameOver) {
-      setTimeout(() => {
-        if (three && !three.dragging && Math.abs(three.momentumX) < 0.001 && Math.abs(three.momentumY) < 0.001)
-          three.autoRotate = true;
-      }, 2500);
-    }
   }
 
   // Only start drag when mousedown is directly on the canvas (not overlay UI)
