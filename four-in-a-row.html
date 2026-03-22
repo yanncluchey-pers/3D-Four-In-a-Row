@@ -87,12 +87,13 @@ body {
   display: flex; flex-direction: column; align-items: stretch;
   background: #23293a; border-radius: var(--card-radius);
   box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
-  overflow: hidden; position: relative; flex-shrink: 0; width: 452px;
+  overflow: hidden; position: relative; flex-shrink: 0; width: 336px;
 }
 .scoreboard-row {
-  display: flex; align-items: center; gap: 16px; padding: 10px 18px 12px;
+  display: flex; align-items: center; padding: 10px 18px 12px;
 }
-.player-slot { display: flex; align-items: center; gap: 8px; transition: opacity 0.3s; min-width: 0; }
+.player-slot { display: flex; align-items: center; gap: 8px; transition: opacity 0.3s; min-width: 0; flex: 1; }
+#slot-x { justify-content: flex-end; }
 .player-slot.inactive { opacity: 0.38; }
 .player-avatar {
   width: var(--avatar-size); height: var(--avatar-size); border-radius: 12px;
@@ -116,7 +117,7 @@ body {
   border-radius: 6px; padding: 1px 6px; outline: none; font-family: inherit; width: 80px;
 }
 .player-score { font-size: var(--score-font); font-weight: 900; color: #fff; line-height: 1; }
-.vs-divider { font-size: 11px; font-weight: 900; color: #4a5268; letter-spacing: 0.1em; flex-shrink: 0; }
+.vs-divider { font-size: 11px; font-weight: 900; color: #4a5268; letter-spacing: 0.1em; flex-shrink: 0; padding: 0 12px; text-align: center; }
 
 /* Mode card (reused in new game modal) */
 .mode-card {
