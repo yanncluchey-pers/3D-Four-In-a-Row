@@ -1659,10 +1659,13 @@ function addSprite3D(l, r, c) {
 
 // ─── Main init ───
 function get3DSize() {
-  const canvas = document.getElementById('three-canvas');
-  const w = canvas.clientWidth || window.innerWidth;
-  const h = canvas.clientHeight || (window.innerHeight - 60);
-  return { w, h };
+  const container = document.getElementById('view3d-container');
+  if (container && container.clientWidth && container.clientHeight) {
+    return { w: container.clientWidth, h: container.clientHeight };
+  }
+  const topBar = document.querySelector('.top-bar');
+  const topH = topBar ? topBar.getBoundingClientRect().bottom : 0;
+  return { w: window.innerWidth, h: window.innerHeight - topH };
 }
 
 function initThree() {
