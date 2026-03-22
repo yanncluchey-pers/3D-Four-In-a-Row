@@ -1263,7 +1263,9 @@ document.addEventListener('keydown', e => {
   }
   if ((e.key === 'd' || e.key === 'D') && !isMobile()) toggleDevMode();
   if (e.key === 'm' || e.key === 'M') {
-    document.getElementById('grids-row').classList.toggle('vertical');
+    const gr = document.getElementById('grids-row');
+    gr.classList.toggle('vertical');
+    document.body.style.justifyContent = gr.classList.contains('vertical') ? 'flex-start' : 'center';
     fitGrid();
   }
 });
