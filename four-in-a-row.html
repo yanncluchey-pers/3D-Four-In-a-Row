@@ -101,6 +101,8 @@ body {
   display: flex; align-items: center; padding: 10px 18px 12px;
 }
 .player-slot { display: flex; align-items: center; gap: 8px; transition: opacity 0.3s; min-width: 0; flex: 1; }
+.player-slot.slot-right { justify-content: flex-end; text-align: right; }
+.player-slot.slot-right .player-name-wrap { justify-content: flex-end; }
 .player-slot.inactive { opacity: 0.38; }
 .player-avatar {
   width: var(--avatar-size); height: var(--avatar-size); border-radius: 12px;
@@ -827,12 +829,12 @@ function renderScoreboard() {
         </div>
       </div>
       <div class="vs-divider">VS</div>
-      <div class="player-slot ${isXActive?'active-x':''} ${winner==='X'?'winner-x':''} ${!gs.gameOver&&!isXActive?'inactive':''}" id="slot-x">
-        <div class="player-avatar">${gs.emojiPair[1]}</div>
+      <div class="player-slot slot-right ${isXActive?'active-x':''} ${winner==='X'?'winner-x':''} ${!gs.gameOver&&!isXActive?'inactive':''}" id="slot-x">
         <div class="player-info">
-          <div class="player-name-wrap">${nameX}${badgeOnX ? onlineBadgeHtml : (xIsAI ? '<span class="ai-badge">AI</span>' : '')}</div>
+          <div class="player-name-wrap">${badgeOnX ? onlineBadgeHtml : (xIsAI ? '<span class="ai-badge">AI</span>' : '')}${nameX}</div>
           <div class="player-score">${gs.scores.X}</div>
         </div>
+        <div class="player-avatar">${gs.emojiPair[1]}</div>
       </div>
     </div>
   `;
