@@ -1272,7 +1272,11 @@ const zoomRoot = document.getElementById('zoom-root');
 function fitGrid() {
   zoomRoot.style.transform = 'scale(1)';
   requestAnimationFrame(() => {
-    const fit = Math.min(1, window.innerWidth / zoomRoot.scrollWidth);
+    const topBar = document.querySelector('.top-bar');
+    const availH = window.innerHeight - (topBar ? topBar.offsetHeight : 0) - 20;
+    const fitW = window.innerWidth / zoomRoot.scrollWidth;
+    const fitH = availH / zoomRoot.scrollHeight;
+    const fit = Math.min(1, fitW, fitH);
     zoomRoot.style.transform = `scale(${fit})`;
   });
 }
