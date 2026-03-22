@@ -1812,14 +1812,15 @@ function buildScene() {
     }
   }
 
-  // Last move subtle highlight in 3D
+  // Last move subtle highlight in 3D — wireframe edges only
   if (gs.lastMove && !gs.gameOver) {
     const { l, r, c } = gs.lastMove;
-    const fillGeo = new THREE.BoxGeometry(CS, CS, CS);
-    const fillMat = new THREE.MeshBasicMaterial({
-      color: 0x78a0ff, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false
+    const edgeGeo = new THREE.BoxGeometry(CS, CS, CS);
+    const edges = new THREE.EdgesGeometry(edgeGeo);
+    const edgeMat = new THREE.LineBasicMaterial({
+      color: 0x78a0ff, transparent: true, opacity: 0.35
     });
-    const fillMesh = new THREE.Mesh(fillGeo, fillMat);
+    const fillMesh = new THREE.LineSegments(edges, edgeMat);
     fillMesh.position.set(-half + c * CS + CS / 2, CS / 2, -half + r * CS + CS / 2);
     three.layerGroups[l].add(fillMesh);
   }
