@@ -305,6 +305,8 @@ body {
 .board-card { width: 220px; flex: none; }
 .grids-row { flex-direction: row; width: fit-content; padding: 0; }
 .grids-row.vertical { flex-direction: column; align-items: center; }
+.grids-row.vertical .board-card { flex-direction: row; align-items: center; }
+.grids-row.vertical .layer-label { order: 3; writing-mode: vertical-lr; }
 
 @media (max-width: 959px) {
   .splash-title { font-size: 32px; }
