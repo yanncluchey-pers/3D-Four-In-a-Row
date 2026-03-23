@@ -158,3 +158,15 @@ To point the app at your own Firebase project:
 ## Browser Compatibility
 
 Tested and working in Chrome, Edge, Firefox, and Safari (desktop and mobile). Requires a browser with ES2020 support and WebGL for the 3D view.
+
+---
+
+## Acknowledgements
+
+The UI design — emoji tokens, dark colour scheme, and overall visual style — was heavily inspired by [**Tic Tac Toe Emoji**](https://play.google.com/store/apps/details?id=com.tryoniarts.tictactoeemoji&hl=en_GB) by Tryoni Arts for Android. If you enjoy this kind of aesthetic, check out their app!
+
+---
+
+## License
+
+This is a hobby project, free and non-commercial. Released under the [MIT License](LICENSE).
