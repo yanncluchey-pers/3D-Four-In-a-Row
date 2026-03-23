@@ -408,6 +408,12 @@ body.mode-vertical .top-bar-right {
   display: none; align-items: center; gap: 10px;
 }
 #view3d-container.active #slice-control { display: flex; }
+.mode-vertical #slice-control {
+  flex-direction: column; align-items: flex-start; gap: 8px;
+}
+.mode-vertical.mode-3d .dev-hint { bottom: 60px; }
+.mode-vertical.dev-active #slice-control { bottom: 38px; }
+.mode-vertical.dev-active.mode-3d .dev-hint { bottom: 82px; }
 
 /* ── 3D layer selector ── */
 #layer-selector {
@@ -1459,16 +1465,25 @@ document.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA') return;
   if ((e.key === 'd' || e.key === 'D') && !isMobile()) { e.preventDefault(); toggleDevMode(); document.activeElement?.blur(); }
-  if (e.key === 'm' || e.key === 'M') {
-    const isVert = document.getElementById('grids-row').classList.toggle('vertical');
-    document.body.classList.toggle('mode-vertical', isVert);
-    fitGrid();
-  }
   if (is3D && !gs.gameOver && e.key >= '1' && e.key <= '4') selectLayer(+e.key - 1);
 });
 
 // Auto-fit: scale #zoom-root to fit viewport
 const zoomRoot = document.getElementById('zoom-root');
+function updateLayoutMode() {
+  const gridsRow = document.getElementById('grids-row');
+  const horizontalWidth = 220 * 4 + 12 * 3;  // 916px
+  const needsVertical = window.innerWidth < horizontalWidth * 0.85;  // ~780px
+  const isVert = gridsRow.classList.contains('vertical');
+  if (needsVertical && !isVert) {
+    gridsRow.classList.add('vertical');
+    document.body.classList.add('mode-vertical');
+  } else if (!needsVertical && isVert) {
+    gridsRow.classList.remove('vertical');
+    document.body.classList.remove('mode-vertical');
+  }
+  if (!is3D) fitGrid();
+}
 function fitGrid() {
   zoomRoot.style.transform = 'scale(1)';
   requestAnimationFrame(() => {
@@ -1499,13 +1514,17 @@ function positionTopBar() {
   const tiBottom = Math.max(14, window.innerHeight - gridBottom - ti.offsetHeight - 12);
   ti.style.bottom = tiBottom + 'px';
 }
-fitGrid();
+updateLayoutMode();
 
 // Re-render on resize
 window.addEventListener('resize', () => {
   setTimeout(renderBoard, 150);
   if (is3D) onThreeResize();
-  else fitGrid();
+  updateLayoutMode();  // always update layout classes (handles fitGrid internally)
+});
+// Handle orientation changes on mobile (fires before dimensions update, so defer)
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => { updateLayoutMode(); }, 150);
 });
 
 // ═══════════════════════════════════════════════
@@ -1561,7 +1580,7 @@ function setViewMode(mode) {
   } else {
     container.classList.remove('active');
     if (three) { cancelAnimationFrame(three.rafId); three.rafId = null; }
-    fitGrid();  // this calls positionTopBar() which positions the turn indicator
+    updateLayoutMode();  // picks correct layout for viewport then calls fitGrid()
     zoomRoot.style.display = '';
     zoomRoot.style.opacity = '0';
     requestAnimationFrame(() => { zoomRoot.style.opacity = '1'; });
