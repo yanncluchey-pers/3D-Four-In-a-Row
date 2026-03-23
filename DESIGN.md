@@ -25,8 +25,8 @@ The entire application is delivered as a single self-contained HTML file with no
 ┌─────────────────────────────────────────────────────┐
 │                   User Interface                     │
 │  ┌────────────┐  ┌────────────┐  ┌───────────────┐  │
-│  │ Scoreboard │  │  2D Board  │  │   3D Viewer   │  │
-│  │  & Controls│  │  (4 cards) │  │  (Three.js)   │  │
+│  │ Top Bar    │  │  2D Board  │  │   3D Viewer   │  │
+│  │ (overlay)  │  │  (4 cards) │  │  (Three.js)   │  │
 │  └─────┬──────┘  └─────┬──────┘  └───────┬───────┘  │
 │        │               │                 │           │
 │  ┌─────▼───────────────▼─────────────────▼────────┐  │
@@ -157,9 +157,10 @@ Real-time two-player over Firebase Realtime Database.
 
 **Key Design Decisions:**
 - Firebase is the single source of truth (no local state mutation in online mode)
-- Presence tracked via `onDisconnect()` callbacks
+- Presence tracked via `onDisconnect()` callbacks; mode button shows live status (Online/Waiting/Disconnected)
 - Stale games pruned client-side after 24 hours of inactivity
 - Only the host can initiate new games
+- Session restore on page refresh (reconnects to active game)
 
 ## 6. Rendering
 
@@ -181,7 +182,8 @@ Activated via the "3D" toggle button. Features:
 - **Assembly animation** — layers fly in from spread positions on open
 - **Slice slider** — separates layers along the Y-axis (0–100%)
 - **Auto-rotation** — continuous slow rotation; pauses on drag or win
-- **Momentum drag** — velocity sampled at ~30 ms, friction coefficient 0.92
+- **Arcball rotation** — drag maps to a virtual sphere for intuitive grab-and-spin in any orientation
+- **Momentum** — last incremental rotation quaternion decays via slerp toward identity
 - **Floating labels** — CSS labels that track 3D layer positions via projection
 
 ### 6.3 Camera Controls
@@ -195,7 +197,7 @@ Activated via the "3D" toggle button. Features:
 
 ## 7. Persistence
 
-Game state is serialised to `localStorage` (key: `4iar3d`) after every move and restored on page load. Online sessions are not persisted — refreshing resets to local human mode.
+Game state is serialised to `localStorage` (key: `4iar3d`) after every move and restored on page load. Online sessions are restored on refresh — the app reconnects to the active Firebase game and re-establishes presence.
 
 ## 8. Responsive Design
 
@@ -203,13 +205,13 @@ Game state is serialised to `localStorage` (key: `4iar3d`) after every move and 
 |--------------------|--------------------------------------------------|
 | Desktop (≥960px)   | Fixed 220px card widths, scroll-zoom             |
 | Tablet (<960px)    | Fluid flex cards, reduced token sizes            |
-| Small phone (<450px height) | Hidden turn indicator, minimal spacing  |
+| Small phone (<450px height) | Minimal spacing, compact layout         |
 
 Touch events use passive listeners. Safe-area insets support notched devices.
 
 ## 9. PWA Support
 
-The app references a `manifest.json` and `sw.js` for installability and offline caching, though these support files are not included in the repository.
+The app includes `manifest.json` and `sw.js` for installability and offline caching. Installable on desktop (Chrome/Edge), Android, and iOS as a standalone app.
 
 ## 10. Security & Privacy
 
@@ -229,11 +231,20 @@ Pressing **D** on desktop toggles a debug panel showing:
 
 ```
 3D-Four-In-a-Row/
-├── four-in-a-row.html   # Complete application (2,453 lines)
-├── README.md            # Project documentation
-├── manifest.json        # PWA manifest (referenced)
-├── sw.js                # Service worker (referenced)
-└── OIP-2206181049.jpg   # Screenshot asset
+├── four-in-a-row.html        # Complete application
+├── README.md                 # Project documentation
+├── HOW-TO-PLAY.md            # Game rules and beginner guide
+├── DESIGN.md                 # This design document
+├── LICENSE                   # MIT License
+├── manifest.json             # PWA manifest
+├── sw.js                     # Service worker
+├── icon.svg                  # App icon (SVG)
+├── icon-192.png              # App icon (192px)
+├── icon-512.png              # App icon (512px)
+├── icon-maskable.svg         # Adaptive icon (SVG)
+├── icon-maskable-192.png     # Adaptive icon (192px)
+├── icon-maskable-512.png     # Adaptive icon (512px)
+└── OIP-2206181049.jpg        # Screenshot asset
 ```
 
 ## 13. Key Design Principles
