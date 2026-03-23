@@ -1856,8 +1856,8 @@ function initThree() {
     winPulseT: 0,
     lastMoveMesh: null,
     // Drag state
-    dragging: false, lastX: 0, lastY: 0,
-    momentumX: 0, momentumY: 0,
+    dragging: false,
+    momentumQuat: new THREE.Quaternion(),
     sliceSep: 0,
     labelEls: [],    // DOM label elements
     // Assembly animation
@@ -2036,18 +2036,40 @@ function positionCameraForWin() {
   three.pivot.quaternion.setFromEuler(euler);
 }
 
-// ── Drag to rotate with momentum ──
+// Check if a quaternion is close to identity (no rotation)
+function isQuatNearIdentity(q) {
+  return Math.abs(1 - q.w) < 0.0001;
+}
+
+// ── Arcball drag to rotate with momentum ──
 function setupDrag() {
   const canvas = document.getElementById('three-canvas');
-  let velX = 0, velY = 0;       // angular velocity (radians/frame)
-  let prevX = 0, prevY = 0;     // previous pointer position for velocity sampling
-  let velSampleT = 0;           // timestamp of last sample
+  let prevSphere = new THREE.Vector3();  // previous point on arcball sphere
+  let lastDeltaQ = new THREE.Quaternion(); // last incremental rotation (for momentum)
+  let velSampleT = 0;
+
+  // Project screen coords onto a unit arcball sphere
+  function projectToSphere(x, y) {
+    const rect = canvas.getBoundingClientRect();
+    const radius = Math.min(rect.width, rect.height) * 0.5;
+    // Normalise to [-1, 1] relative to canvas center
+    const nx = (x - rect.left - rect.width / 2) / radius;
+    const ny = -(y - rect.top - rect.height / 2) / radius; // flip Y
+    const lenSq = nx * nx + ny * ny;
+    if (lenSq <= 1) {
+      // Inside sphere — project onto surface
+      return new THREE.Vector3(nx, ny, Math.sqrt(1 - lenSq));
+    } else {
+      // Outside sphere — normalise to sphere edge (hyperbolic falloff)
+      const len = Math.sqrt(lenSq);
+      return new THREE.Vector3(nx / len, ny / len, 0);
+    }
+  }
 
   function onDown(x, y) {
     three.dragging = true;
-    three.lastX = x; three.lastY = y;
-    prevX = x; prevY = y;
-    velX = 0; velY = 0;
+    prevSphere = projectToSphere(x, y);
+    lastDeltaQ.identity();
     velSampleT = performance.now();
     three.autoRotate = false;
     // Permanently disable auto-rotate once user drags during an active game
@@ -2056,34 +2078,42 @@ function setupDrag() {
 
   function onMove(x, y) {
     if (!three.dragging) return;
-    const dx = x - three.lastX, dy = y - three.lastY;
-    // Apply rotation relative to camera view using quaternions
-    const qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dx * 0.008);
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(three.pivot.quaternion);
-    const qX = new THREE.Quaternion().setFromAxisAngle(right, dy * 0.008);
-    three.pivot.quaternion.premultiply(qY).premultiply(qX);
-    three.lastX = x; three.lastY = y;
+    const currSphere = projectToSphere(x, y);
 
-    // Sample velocity every ~30ms for momentum
-    const now = performance.now();
-    const dt = now - velSampleT;
-    if (dt > 20) {
-      velX = (x - prevX) / dt * 16; // normalise to ~60fps frame
-      velY = (y - prevY) / dt * 16;
-      prevX = x; prevY = y;
-      velSampleT = now;
+    // Compute rotation from arc between prev and curr sphere points
+    // Transform sphere points into pivot-local space so rotation feels correct
+    const camQ = new THREE.Quaternion();
+    three.camera.getWorldQuaternion(camQ);
+    const a = prevSphere.clone().applyQuaternion(camQ);
+    const b = currSphere.clone().applyQuaternion(camQ);
+
+    const axis = new THREE.Vector3().crossVectors(a, b);
+    const axisLen = axis.length();
+    if (axisLen > 1e-6) {
+      axis.divideScalar(axisLen); // normalise
+      const angle = Math.acos(Math.max(-1, Math.min(1, a.dot(b))));
+      const q = new THREE.Quaternion().setFromAxisAngle(axis, angle);
+      three.pivot.quaternion.premultiply(q);
+
+      // Sample momentum — track the last incremental rotation
+      const now = performance.now();
+      const dt = now - velSampleT;
+      if (dt > 20) {
+        lastDeltaQ.copy(q);
+        velSampleT = now;
+      }
     }
+    prevSphere.copy(currSphere);
   }
 
   function onUp() {
     three.dragging = false;
-    // Hand off velocity to momentum system
-    three.momentumX = velX * 0.008;
-    three.momentumY = velY * 0.008;
+    // Hand off last incremental rotation as momentum
+    three.momentumQuat.copy(lastDeltaQ);
     // Resume auto-rotate for won games, or if user hasn't dragged during active play
     if (gs.gameOver || !three.userHasDragged) {
       setTimeout(() => {
-        if (three && !three.dragging && Math.abs(three.momentumX) < 0.001 && Math.abs(three.momentumY) < 0.001)
+        if (three && !three.dragging && isQuatNearIdentity(three.momentumQuat))
           three.autoRotate = true;
       }, 1500);
     }
@@ -2297,19 +2327,16 @@ function animate3D() {
     }
   }
 
-  // Momentum: decay angular velocity and apply via quaternions
-  if (!three.dragging && (Math.abs(three.momentumX) > 0.0001 || Math.abs(three.momentumY) > 0.0001)) {
-    const qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), three.momentumX);
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(three.pivot.quaternion);
-    const qX = new THREE.Quaternion().setFromAxisAngle(right, three.momentumY);
-    three.pivot.quaternion.premultiply(qY).premultiply(qX);
-    three.momentumX *= 0.92;
-    three.momentumY *= 0.92;
+  // Momentum: decay rotation quaternion toward identity
+  if (!three.dragging && !isQuatNearIdentity(three.momentumQuat)) {
+    three.pivot.quaternion.premultiply(three.momentumQuat);
+    // Slerp momentum toward identity (decay)
+    three.momentumQuat.slerp(new THREE.Quaternion(), 0.08);
   }
 
   // Auto-rotation (only when momentum is negligible)
   if (three.autoRotate && !three.dragging && !three.assembling &&
-      Math.abs(three.momentumX) < 0.0005 && Math.abs(three.momentumY) < 0.0005) {
+      isQuatNearIdentity(three.momentumQuat)) {
     const speed = gs.gameOver ? 0.006 : 0.004;
     const qSpin = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), speed);
     three.pivot.quaternion.premultiply(qSpin);
