@@ -237,12 +237,17 @@ body {
 .grids-row.ai-thinking .cell { cursor: default !important; pointer-events: none; }
 .grids-row.grid-waiting .cell { cursor: default !important; pointer-events: none; }
 .grids-row.grid-waiting .cell:hover { background: transparent !important; }
-.cell.win-cell { animation: winPulse 0.8s ease-in-out infinite alternate; }
+.cell.win-cell { animation: winPulseO 0.8s ease-in-out infinite alternate; }
+.cell.win-cell.win-x { animation-name: winPulseX; }
 .cell.last-move { background: rgba(120,160,255,0.10); }
 .cell.last-move:hover { background: rgba(120,160,255,0.16); }
-@keyframes winPulse {
+@keyframes winPulseO {
   from { background: rgba(255,220,80,0.12); }
   to   { background: rgba(255,220,80,0.28); }
+}
+@keyframes winPulseX {
+  from { background: rgba(183,132,255,0.12); }
+  to   { background: rgba(183,132,255,0.28); }
 }
 .token {
   font-size: var(--token-size);
@@ -1034,6 +1039,7 @@ function renderToken(val, animate = false) {
 }
 
 let winCells = new Set();
+let winPlayer = null;
 // lastMove is now stored in gs.lastMove
 
 function renderBoard() {
@@ -1057,7 +1063,7 @@ function renderBoard() {
         const isLast = isLastCell && !gs._lastMoveRendered;
         let cls = 'cell';
         if (val)    cls += ' occupied';
-        if (isWin)  cls += ' win-cell';
+        if (isWin)  cls += ' win-cell' + (winPlayer === 'X' ? ' win-x' : '');
         if (isLastCell) cls += ' last-move';
         cell.className = cls;
         cell.dataset.l = l; cell.dataset.r = r; cell.dataset.c = c;
@@ -1225,6 +1231,7 @@ function _afterPlace() {
   if (winLine) {
     gs.gameOver = true; gs.scores[gs.turn]++;
     winCells = new Set(winLine.map(([l,r,c]) => `${l},${r},${c}`));
+    winPlayer = gs.turn;
     saveState(); renderBoard();
     if (is3D && three && gs.lastMove) addSprite3D(gs.lastMove.l, gs.lastMove.r, gs.lastMove.c);
     if (is3D && three) setTimeout(addWinHighlights3D, 60);
@@ -1374,7 +1381,7 @@ function closeModeModal() {
 function closeNewGameModal() { closeModeModal(); }
 
 function startNewGame(keepScores = true) {
-  hideBanner(); aiThinking = false; winCells = new Set(); gs.lastMove = null;
+  hideBanner(); aiThinking = false; winCells = new Set(); winPlayer = null; gs.lastMove = null;
   // Online new game — only host can reset
   if (gs.playerXType === 'online') {
     if (onlineState.myRole === 'O') {
@@ -1497,7 +1504,8 @@ function fitGrid() {
 function positionTopBar() {
   const topBar = document.querySelector('.top-bar');
   const ti = document.getElementById('turn-indicator');
-  if (is3D) {
+  const mobileVertical = !is3D && isMobile() && document.body.classList.contains('mode-vertical');
+  if (is3D || mobileVertical) {
     topBar.style.marginTop = '0px';
     ti.style.bottom = '14px';
     return;
@@ -1539,7 +1547,7 @@ if (gs.playerXType === 'online' && !loadOnlineSession()) {
 if (gs.gameOver) {
   for (const p of ['O','X']) {
     const line = checkWin(p);
-    if (line) { winCells = new Set(line.map(([l,r,c]) => `${l},${r},${c}`)); break; }
+    if (line) { winCells = new Set(line.map(([l,r,c]) => `${l},${r},${c}`)); winPlayer = p; break; }
   }
 }
 renderBoard();
@@ -1858,6 +1866,7 @@ function updateLastMove3D(l, r, c) {
 function addWinHighlights3D() {
   if (!three || !three.layerGroups) return;
   const N = 4; const CS = 3.0 / N; const half = 1.5;
+  const winColor = winPlayer === 'X' ? 0xb784ff : 0xffdc50;
   three.winEdges = [];
   winCells.forEach(key => {
     const [l, r, c] = key.split(',').map(Number);
@@ -1867,7 +1876,7 @@ function addWinHighlights3D() {
     // Filled box
     const fillGeo = new THREE.BoxGeometry(CS, CS, CS);
     const fillMat = new THREE.MeshBasicMaterial({
-      color: 0xffdc50, transparent: true, opacity: 0.08, depthWrite: false
+      color: winColor, transparent: true, opacity: 0.08, depthWrite: false
     });
     const fillMesh = new THREE.Mesh(fillGeo, fillMat);
     fillMesh.position.set(x, CS / 2, z);
@@ -1877,7 +1886,7 @@ function addWinHighlights3D() {
     const edgeGeo = new THREE.BoxGeometry(CS, CS, CS);
     const edges = new THREE.EdgesGeometry(edgeGeo);
     const edgeMat = new THREE.LineBasicMaterial({
-      color: 0xffdc50, transparent: true, opacity: 0.7
+      color: winColor, transparent: true, opacity: 0.7
     });
     const wireframe = new THREE.LineSegments(edges, edgeMat);
     wireframe.position.set(x, CS / 2, z);
@@ -2003,6 +2012,7 @@ function buildScene() {
   three.vertGrp = null;
 
   // Sprites and win cell edge highlights
+  const rebuildWinColor = winPlayer === 'X' ? 0xb784ff : 0xffdc50;
   three.winEdges = [];
   for (let l = 0; l < 4; l++) {
     for (let r = 0; r < 4; r++) {
@@ -2018,7 +2028,7 @@ function buildScene() {
             // Glowing filled box
             const fillGeo = new THREE.BoxGeometry(CS, CS, CS);
             const fillMat = new THREE.MeshBasicMaterial({
-              color: 0xffdc50, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false
+              color: rebuildWinColor, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false
             });
             const fillMesh = new THREE.Mesh(fillGeo, fillMat);
             fillMesh.position.set(x, CS / 2, z);
@@ -2028,7 +2038,7 @@ function buildScene() {
             const edgeGeo = new THREE.BoxGeometry(CS, CS, CS);
             const edges = new THREE.EdgesGeometry(edgeGeo);
             const edgeMat = new THREE.LineBasicMaterial({
-              color: 0xffdc50, transparent: true, opacity: 0.7
+              color: rebuildWinColor, transparent: true, opacity: 0.7
             });
             const wireframe = new THREE.LineSegments(edges, edgeMat);
             wireframe.position.set(x, CS / 2, z);
@@ -2920,11 +2930,11 @@ function attachOnlineListener(code) {
     }
 
     // ── Win cells ──
-    winCells = new Set();
+    winCells = new Set(); winPlayer = null;
     if (gs.gameOver) {
       for (const p of ['O','X']) {
         const line = checkWin(p);
-        if (line) { winCells = new Set(line.map(([l,r,c]) => `${l},${r},${c}`)); break; }
+        if (line) { winCells = new Set(line.map(([l,r,c]) => `${l},${r},${c}`)); winPlayer = p; break; }
       }
     }
 
